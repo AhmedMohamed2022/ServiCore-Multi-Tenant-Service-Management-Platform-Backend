@@ -10,7 +10,7 @@ namespace ServiCore.Domain.Entities;
 
 public class Organization : Entity
 {
-    public string Name { get; private set; }
+    public string Name { get; private set; } = null!;
 
     public DateTime CreatedAt { get; private set; }
 
