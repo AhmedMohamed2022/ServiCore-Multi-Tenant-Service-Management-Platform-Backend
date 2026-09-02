@@ -1,15 +1,15 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using ServiCore.Application.Common.Interfaces;
+using ServiCore.Domain.Entities;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-using Microsoft.EntityFrameworkCore;
-using ServiCore.Domain.Entities;
-
 namespace ServiCore.Infrastructure.Persistence;
 
-public class ServiCoreDbContext : DbContext
+public class ServiCoreDbContext : DbContext, IApplicationDbContext
 {
     public ServiCoreDbContext(
         DbContextOptions<ServiCoreDbContext> options)
@@ -17,7 +17,7 @@ public class ServiCoreDbContext : DbContext
     {
     }
 
-    public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<Organization>  Organizations => Set<Organization>();
 
     public DbSet<Team> Teams => Set<Team>();
 
@@ -30,7 +30,10 @@ public class ServiCoreDbContext : DbContext
     public DbSet<Ticket> Tickets => Set<Ticket>();
 
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
-
+    public void AddOrganization(Organization organization)
+    {
+        Organizations.Add(organization);
+    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -1,22 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using ServiCore.Infrastructure.Persistence;
 using ServiCore.Infrastructure;
+using ServiCore.Application;
 
-public class Program
+public partial class Program
 {
     public static void Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        builder.Services.AddApplication();
         builder.Services.AddInfrastructure(
                 builder.Configuration);
 
         // Add services to the container.
         // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-        builder.Services.AddAuthorization();
         builder.Services.AddControllers();
-        //builder.Services.AddHttpsRedirection(options =>
-        //options.HttpsPort = 7059);
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
@@ -30,12 +29,13 @@ public class Program
         }
 
         app.UseHttpsRedirection();
-        app.UseAuthorization();
 
         app.MapControllers();
         app.Run();
 
     }
 }
-
+public partial class Program
+{
+}
 
