@@ -17,12 +17,13 @@ public class Team : Entity
     public string? Description { get; private set; }
 
     public DateTime CreatedAt { get; private set; }
+    public bool IsActive { get; private set; }
 
     private Team()
     {
     }
 
-    public Team(Guid organizationId, string name, string? description = null)
+    public Team(Guid organizationId,string name,string? description = null)
     {
         if (organizationId == Guid.Empty)
             throw new ArgumentException(
@@ -39,5 +40,26 @@ public class Team : Entity
         Name = name.Trim();
         Description = description?.Trim();
         CreatedAt = DateTime.UtcNow;
+        IsActive = true;
+    }
+    public void Update(string name,string? description)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException(
+                "Team name is required.",
+                nameof(name));
+
+        Name = name.Trim();
+        Description = description?.Trim();
+    }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+    }
+
+    public void Activate()
+    {
+        IsActive = true;
     }
 }

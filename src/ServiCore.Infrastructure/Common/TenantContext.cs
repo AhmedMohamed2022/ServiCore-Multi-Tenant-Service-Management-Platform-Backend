@@ -10,5 +10,10 @@ namespace ServiCore.Infrastructure.Common;
 
 public class TenantContext : ITenantContext
 {
-    public Guid? OrganizationId { get; set; }
+    public Guid? OrganizationId { get; private set; }
+
+    public void SetOrganization(Guid organizationId)
+    {
+        OrganizationId = organizationId;
+    }
 }

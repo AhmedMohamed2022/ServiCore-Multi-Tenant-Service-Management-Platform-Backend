@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using ServiCore.Infrastructure.Persistence;
-using ServiCore.Infrastructure;
+using ServiCore.API.Middleware;
 using ServiCore.Application;
+using ServiCore.Infrastructure;
+using ServiCore.Infrastructure.Persistence;
 
 public partial class Program
 {
@@ -29,6 +30,11 @@ public partial class Program
         }
 
         app.UseHttpsRedirection();
+
+        app.UseAuthentication();
+        app.UseMiddleware<TenantResolutionMiddleware>();
+
+        app.UseAuthorization();
 
         app.MapControllers();
         app.Run();

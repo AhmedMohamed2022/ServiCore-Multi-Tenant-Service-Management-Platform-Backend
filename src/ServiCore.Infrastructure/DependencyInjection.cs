@@ -1,8 +1,13 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using ServiCore.Application.Common.Interfaces;
+using ServiCore.Infrastructure.Authentication;
 using ServiCore.Infrastructure.Common;
+using ServiCore.Infrastructure.Identity;
 using ServiCore.Infrastructure.Persistence;
 using System;
 using System.Collections.Generic;
@@ -22,11 +27,77 @@ public static class DependencyInjection
             options.UseSqlServer(
                 configuration.GetConnectionString("DefaultConnection")));
 
+        services.AddIdentityCore<ApplicationUser>(options =>
+        {
+            options.User.RequireUniqueEmail = true;
+        }).AddSignInManager()
+        .AddEntityFrameworkStores<ServiCoreDbContext>();
+
+        var jwtSection = configuration.GetSection(
+    JwtOptions.SectionName);
+
+        services.Configure<JwtOptions>(options =>
+        {
+            options.Issuer =
+                jwtSection["Issuer"]
+                ?? throw new InvalidOperationException(
+                    "JWT issuer is not configured.");
+
+            options.Audience =
+                jwtSection["Audience"]
+                ?? throw new InvalidOperationException(
+                    "JWT audience is not configured.");
+
+            options.SecretKey =
+                configuration["JWT_SECRET_KEY"]
+                ?? throw new InvalidOperationException(
+                    "JWT secret key is not configured.");
+        });
+
+        services.AddAuthentication(
+    JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        var jwtOptions =
+            jwtSection.Get<JwtOptions>()
+            ?? throw new InvalidOperationException(
+                "JWT configuration is missing.");
+
+        var secretKey =
+            configuration["JWT_SECRET_KEY"]
+            ?? throw new InvalidOperationException(
+                "JWT secret key is not configured.");
+
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = jwtOptions.Issuer,
+
+                ValidateAudience = true,
+                ValidAudience = jwtOptions.Audience,
+
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey =
+                    new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(secretKey)),
+
+                ValidateLifetime = true,
+
+                ClockSkew = TimeSpan.FromMinutes(1)
+            };
+    });
+
+        services.AddHttpContextAccessor();
+
+        services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<IApplicationDbContext>(
     provider => provider.GetRequiredService<ServiCoreDbContext>());
 
-
         services.AddScoped<ITenantContext, TenantContext>();
+        services.AddScoped<IIdentityService, IdentityService>();
+        services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddScoped<ITenantResolver, TenantResolver>();
 
         return services;
     }
