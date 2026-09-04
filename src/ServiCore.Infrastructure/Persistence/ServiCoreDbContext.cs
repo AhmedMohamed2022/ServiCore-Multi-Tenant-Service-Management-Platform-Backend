@@ -83,7 +83,70 @@ public class ServiCoreDbContext
 
         return new ApplicationTransaction(transaction);
     }
+    public void AddTeamMember(TeamMember member)
+    {
+        TeamMembers.Add(member);
+    }
 
+    public async Task<bool> OrganizationMemberExistsAsync(Guid organizationId,Guid userId,CancellationToken cancellationToken = default)
+    {
+        return await OrganizationMembers
+            .AnyAsync(
+                x =>
+                    x.OrganizationId == organizationId &&
+                    x.UserId == userId,
+                cancellationToken);
+    }
+
+    public async Task<bool> TeamMemberExistsAsync(
+        Guid teamId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await TeamMembers
+            .AnyAsync(
+                x =>
+                    x.TeamId == teamId &&
+                    x.UserId == userId,
+                cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TeamMember>>
+        GetTeamMembersAsync(
+            Guid organizationId,
+            Guid teamId,
+            CancellationToken cancellationToken = default)
+    {
+        return await TeamMembers
+            .Where(x =>
+                x.TeamId == teamId &&
+                Teams.Any(team =>
+                    team.Id == x.TeamId &&
+                    team.OrganizationId == organizationId))
+            .OrderBy(x => x.JoinedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<TeamMember?> GetTeamMemberAsync(
+        Guid organizationId,
+        Guid teamId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await TeamMembers
+            .Where(x =>
+                x.TeamId == teamId &&
+                x.UserId == userId &&
+                Teams.Any(team =>
+                    team.Id == x.TeamId &&
+                    team.OrganizationId == organizationId))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    public void RemoveTeamMember(TeamMember member)
+    {
+        TeamMembers.Remove(member);
+    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

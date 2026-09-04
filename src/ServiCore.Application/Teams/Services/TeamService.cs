@@ -25,7 +25,7 @@ public class TeamService : ITeamService
         _tenantContext = tenantContext;
     }
 
-    public async Task<Result<TeamDto>> CreateAsync(string name,string? description,CancellationToken cancellationToken = default)
+    public async Task<Result<TeamDto>> CreateAsync(string name, string? description, CancellationToken cancellationToken = default)
     {
         if (!_tenantContext.OrganizationId.HasValue)
         {
@@ -64,9 +64,7 @@ public class TeamService : ITeamService
         var organizationId =
             _tenantContext.OrganizationId.Value;
 
-        var teams = await _dbContext.GetTeamsAsync(
-            organizationId,
-            cancellationToken);
+        var teams = await _dbContext.GetTeamsAsync(organizationId, cancellationToken);
 
         var result = teams
             .Select(x => new TeamDto(
@@ -78,5 +76,106 @@ public class TeamService : ITeamService
             .ToList();
 
         return Result<IReadOnlyList<TeamDto>>.Success(result);
+    }
+    public async Task<Result<TeamDto>> GetByIdAsync(Guid teamId, CancellationToken cancellationToken = default)
+    {
+        if (!_tenantContext.OrganizationId.HasValue)
+        {
+            return Result<TeamDto>.Failure(
+                "An organization context is required.");
+        }
+
+        var organizationId =
+            _tenantContext.OrganizationId.Value;
+
+        var team = await _dbContext.GetTeamAsync(organizationId, teamId, cancellationToken);
+
+        if (team is null || !team.IsActive)
+        {
+            return Result<TeamDto>.Failure(
+                "Team not found.");
+        }
+
+        var dto = new TeamDto(
+            team.Id,
+            team.OrganizationId,
+            team.Name,
+            team.Description,
+            team.CreatedAt);
+
+        return Result<TeamDto>.Success(dto);
+    }
+    public async Task<Result<TeamDto>> UpdateAsync(Guid teamId, string name, string? description, CancellationToken cancellationToken = default)
+    {
+        if (!_tenantContext.OrganizationId.HasValue)
+        {
+            return Result<TeamDto>.Failure(
+                "An organization context is required.");
+        }
+
+        var organizationId =
+            _tenantContext.OrganizationId.Value;
+
+        var team = await _dbContext.GetTeamAsync(
+            organizationId,
+            teamId,
+            cancellationToken);
+
+        if (team is null || !team.IsActive)
+        {
+            return Result<TeamDto>.Failure(
+                "Team not found.");
+        }
+
+        try
+        {
+            team.Update(name, description);
+        }
+        catch (ArgumentException ex)
+        {
+            return Result<TeamDto>.Failure(
+                ex.Message);
+        }
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        var dto = new TeamDto(
+            team.Id,
+            team.OrganizationId,
+            team.Name,
+            team.Description,
+            team.CreatedAt);
+
+        return Result<TeamDto>.Success(dto);
+    }
+    public async Task<Result> DeactivateAsync(Guid teamId, CancellationToken cancellationToken = default)
+    {
+        if (!_tenantContext.OrganizationId.HasValue)
+        {
+            return Result.Failure(
+                "An organization context is required.");
+        }
+
+        var organizationId =
+            _tenantContext.OrganizationId.Value;
+
+        var team = await _dbContext.GetTeamAsync(
+            organizationId,
+            teamId,
+            cancellationToken);
+
+        if (team is null || !team.IsActive)
+        {
+            return Result.Failure(
+                "Team not found.");
+        }
+
+        team.Deactivate();
+
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        return Result.Success();
     }
 }

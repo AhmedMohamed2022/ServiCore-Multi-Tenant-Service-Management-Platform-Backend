@@ -27,6 +27,14 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
 
         builder.Property(x => x.CreatedAt)
             .IsRequired();
+        builder.Property(x => x.IsActive)
+            .IsRequired();
+
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.IsActive
+        });
 
         builder.HasIndex(x => new
         {

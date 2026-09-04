@@ -1,11 +1,14 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using ServiCore.Application.Common.Interfaces;
+using ServiCore.Domain.Enums;
 using ServiCore.Infrastructure.Authentication;
+using ServiCore.Infrastructure.Authentication.Authorization;
 using ServiCore.Infrastructure.Common;
 using ServiCore.Infrastructure.Identity;
 using ServiCore.Infrastructure.Persistence;
@@ -87,6 +90,23 @@ public static class DependencyInjection
                 ClockSkew = TimeSpan.FromMinutes(1)
             };
     });
+
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy(
+                "CanManageTeams",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+
+                    policy.AddRequirements(
+                        new OrganizationRoleRequirement(
+                            OrganizationRole.Owner,
+                            OrganizationRole.Manager));
+                });
+        });
+
+        services.AddScoped<IAuthorizationHandler, OrganizationRoleAuthorizationHandler>();
 
         services.AddHttpContextAccessor();
 
