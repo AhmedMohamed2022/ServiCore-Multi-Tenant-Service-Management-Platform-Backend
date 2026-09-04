@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using ServiCore.Domain.Common;
+﻿using ServiCore.Domain.Common;
 
 namespace ServiCore.Domain.Entities;
 
@@ -16,9 +10,15 @@ public class Customer : Entity
 
     public string Name { get; private set; } = null!;
 
+    public string Email { get; private set; } = null!;
+
     public string? PhoneNumber { get; private set; }
 
+    public bool IsActive { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
+
+    public DateTime UpdatedAt { get; private set; }
 
     private Customer()
     {
@@ -27,6 +27,7 @@ public class Customer : Entity
     public Customer(
         Guid organizationId,
         string name,
+        string email,
         string? phoneNumber = null)
     {
         if (organizationId == Guid.Empty)
@@ -39,11 +40,51 @@ public class Customer : Entity
                 "Customer name is required.",
                 nameof(name));
 
+        if (string.IsNullOrWhiteSpace(email))
+            throw new ArgumentException(
+                "Customer email is required.",
+                nameof(email));
+
+        var now = DateTime.UtcNow;
+
         Id = Guid.NewGuid();
         OrganizationId = organizationId;
         Name = name.Trim();
+        Email = email.Trim().ToLowerInvariant();
         PhoneNumber = phoneNumber?.Trim();
-        CreatedAt = DateTime.UtcNow;
+        IsActive = true;
+        CreatedAt = now;
+        UpdatedAt = now;
+    }
+
+    public void Update(
+        string name,
+        string email,
+        string? phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException(
+                "Customer name is required.",
+                nameof(name));
+
+        if (string.IsNullOrWhiteSpace(email))
+            throw new ArgumentException(
+                "Customer email is required.",
+                nameof(email));
+
+        Name = name.Trim();
+        Email = email.Trim().ToLowerInvariant();
+        PhoneNumber = phoneNumber?.Trim();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Deactivate()
+    {
+        if (!IsActive)
+            return;
+
+        IsActive = false;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void LinkUser(Guid userId)
@@ -54,5 +95,6 @@ public class Customer : Entity
                 nameof(userId));
 
         UserId = userId;
+        UpdatedAt = DateTime.UtcNow;
     }
 }

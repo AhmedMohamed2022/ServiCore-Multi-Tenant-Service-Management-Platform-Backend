@@ -147,6 +147,58 @@ public class ServiCoreDbContext
     {
         TeamMembers.Remove(member);
     }
+    public void AddCustomer(Customer customer)
+    {
+        Customers.Add(customer);
+    }
+
+    public async Task<IReadOnlyList<Customer>> GetCustomersAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Customers
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.IsActive)
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Customer?> GetCustomerAsync(
+        Guid organizationId,
+        Guid customerId,
+        bool activeOnly = true,
+        CancellationToken cancellationToken = default)
+    {
+        var query = Customers.Where(x =>
+            x.OrganizationId == organizationId &&
+            x.Id == customerId);
+
+        if (activeOnly)
+        {
+            query = query.Where(x => x.IsActive);
+        }
+
+        return await query.SingleOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<bool> CustomerEmailExistsAsync(
+        Guid organizationId,
+        string email,
+        Guid? excludingCustomerId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedEmail =
+            email.Trim().ToLowerInvariant();
+
+        return await Customers.AnyAsync(
+            x =>
+                x.OrganizationId == organizationId &&
+                x.Email == normalizedEmail &&
+                (!excludingCustomerId.HasValue ||
+                 x.Id != excludingCustomerId.Value),
+            cancellationToken);
+    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

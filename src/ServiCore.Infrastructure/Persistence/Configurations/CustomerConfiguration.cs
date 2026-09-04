@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ServiCore.Domain.Entities;
 
@@ -22,13 +16,33 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
             .IsRequired()
             .HasMaxLength(200);
 
+        builder.Property(x => x.Email)
+            .IsRequired()
+            .HasMaxLength(320);
+
         builder.Property(x => x.PhoneNumber)
             .HasMaxLength(30);
+
+        builder.Property(x => x.IsActive)
+            .IsRequired();
 
         builder.Property(x => x.CreatedAt)
             .IsRequired();
 
-        builder.HasIndex(x => x.OrganizationId);
+        builder.Property(x => x.UpdatedAt)
+            .IsRequired();
+
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.Email
+        }).IsUnique();
+
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.IsActive
+        });
 
         builder.HasIndex(x => x.UserId);
     }

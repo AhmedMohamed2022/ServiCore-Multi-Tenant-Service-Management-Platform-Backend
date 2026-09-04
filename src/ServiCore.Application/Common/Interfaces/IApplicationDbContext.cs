@@ -31,5 +31,12 @@ public interface IApplicationDbContext
     Task<TeamMember?> GetTeamMemberAsync(Guid organizationId, Guid teamId, Guid userId, CancellationToken cancellationToken = default);
 
     void RemoveTeamMember(TeamMember member);
-    Task<bool> OrganizationMemberExistsAsync(Guid organizationId, Guid userId,CancellationToken cancellationToken = default);
+    Task<bool> OrganizationMemberExistsAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
+    void AddCustomer(Customer customer);
+
+    Task<IReadOnlyList<Customer>> GetCustomersAsync(Guid organizationId, CancellationToken cancellationToken = default);
+
+    Task<Customer?> GetCustomerAsync(Guid organizationId, Guid customerId, bool activeOnly = true, CancellationToken cancellationToken = default);
+
+    Task<bool> CustomerEmailExistsAsync(Guid organizationId, string email, Guid? excludingCustomerId = null, CancellationToken cancellationToken = default);
 }
