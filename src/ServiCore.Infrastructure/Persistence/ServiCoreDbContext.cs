@@ -199,6 +199,58 @@ public class ServiCoreDbContext
                  x.Id != excludingCustomerId.Value),
             cancellationToken);
     }
+    public void AddCategory(Category category)
+    {
+        Categories.Add(category);
+    }
+
+    public async Task<IReadOnlyList<Category>> GetCategoriesAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Categories
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.IsActive)
+            .OrderBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Category?> GetCategoryAsync(
+        Guid organizationId,
+        Guid categoryId,
+        bool activeOnly = true,
+        CancellationToken cancellationToken = default)
+    {
+        var query = Categories.Where(x =>
+            x.OrganizationId == organizationId &&
+            x.Id == categoryId);
+
+        if (activeOnly)
+        {
+            query = query.Where(x => x.IsActive);
+        }
+
+        return await query.SingleOrDefaultAsync(
+            cancellationToken);
+    }
+
+    public async Task<bool> CategoryNameExistsAsync(
+        Guid organizationId,
+        string name,
+        Guid? excludingCategoryId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedName = name.Trim();
+
+        return await Categories.AnyAsync(
+            x =>
+                x.OrganizationId == organizationId &&
+                x.Name == normalizedName &&
+                (!excludingCategoryId.HasValue ||
+                 x.Id != excludingCategoryId.Value),
+            cancellationToken);
+    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

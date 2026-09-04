@@ -1,18 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ServiCore.Domain.Entities;
 
 namespace ServiCore.Infrastructure.Persistence.Configurations;
 
-public class CategoryConfiguration : IEntityTypeConfiguration<Category>
+public class CategoryConfiguration
+    : IEntityTypeConfiguration<Category>
 {
-    public void Configure(EntityTypeBuilder<Category> builder)
+    public void Configure(
+        EntityTypeBuilder<Category> builder)
     {
         builder.ToTable("Categories");
 
@@ -28,11 +24,23 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.Property(x => x.IsActive)
             .IsRequired();
 
+        builder.Property(x => x.CreatedAt)
+            .IsRequired();
+
+        builder.Property(x => x.UpdatedAt)
+            .IsRequired();
+
         builder.HasIndex(x => new
         {
             x.OrganizationId,
             x.Name
         })
         .IsUnique();
+
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.IsActive
+        });
     }
 }

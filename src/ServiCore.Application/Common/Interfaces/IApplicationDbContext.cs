@@ -39,4 +39,11 @@ public interface IApplicationDbContext
     Task<Customer?> GetCustomerAsync(Guid organizationId, Guid customerId, bool activeOnly = true, CancellationToken cancellationToken = default);
 
     Task<bool> CustomerEmailExistsAsync(Guid organizationId, string email, Guid? excludingCustomerId = null, CancellationToken cancellationToken = default);
+    void AddCategory(Category category);
+
+    Task<IReadOnlyList<Category>> GetCategoriesAsync(Guid organizationId, CancellationToken cancellationToken = default);
+
+    Task<Category?> GetCategoryAsync(Guid organizationId, Guid categoryId, bool activeOnly = true, CancellationToken cancellationToken = default);
+
+    Task<bool> CategoryNameExistsAsync(Guid organizationId, string name, Guid? excludingCategoryId = null, CancellationToken cancellationToken = default);
 }
