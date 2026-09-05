@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ServiCore.Domain.Entities;
 
@@ -38,15 +32,45 @@ public class TicketConfiguration : IEntityTypeConfiguration<Ticket>
         builder.Property(x => x.UpdatedAt)
             .IsRequired();
 
-        builder.HasIndex(x => x.OrganizationId);
+        builder.Property(x => x.ResolvedAt);
 
-        builder.HasIndex(x => x.CustomerId);
+        builder.Property(x => x.ClosedAt);
 
-        builder.HasIndex(x => x.TeamId);
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.Status
+        });
 
-        builder.HasIndex(x => x.AssignedAgentId);
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.Priority
+        });
 
-        builder.HasIndex(x => x.CategoryId);
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.CustomerId
+        });
+
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.TeamId
+        });
+
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.AssignedAgentId
+        });
+
+        builder.HasIndex(x => new
+        {
+            x.OrganizationId,
+            x.CategoryId
+        });
 
         builder.HasOne<Customer>()
             .WithMany()

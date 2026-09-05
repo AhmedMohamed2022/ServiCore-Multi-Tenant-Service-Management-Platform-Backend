@@ -1,10 +1,10 @@
-﻿using System;
+﻿using ServiCore.Domain.Entities;
+using ServiCore.Domain.Enums;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
-using ServiCore.Domain.Entities;
 
 namespace ServiCore.Application.Common.Interfaces;
 
@@ -46,4 +46,17 @@ public interface IApplicationDbContext
     Task<Category?> GetCategoryAsync(Guid organizationId, Guid categoryId, bool activeOnly = true, CancellationToken cancellationToken = default);
 
     Task<bool> CategoryNameExistsAsync(Guid organizationId, string name, Guid? excludingCategoryId = null, CancellationToken cancellationToken = default);
+    void AddTicket(Ticket ticket);
+
+    Task<IReadOnlyList<Ticket>> GetTicketsAsync(Guid organizationId, CancellationToken cancellationToken = default);
+
+    Task<Ticket?> GetTicketAsync(Guid organizationId, Guid ticketId, CancellationToken cancellationToken = default);
+
+    Task<bool> CustomerBelongsToOrganizationAsync(Guid organizationId, Guid customerId, CancellationToken cancellationToken = default);
+
+    Task<bool> TeamBelongsToOrganizationAsync(Guid organizationId, Guid teamId, CancellationToken cancellationToken = default);
+
+    Task<bool> CategoryBelongsToOrganizationAsync(Guid organizationId, Guid categoryId, CancellationToken cancellationToken = default);
+    Task<OrganizationRole?> GetOrganizationRoleAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
+
 }

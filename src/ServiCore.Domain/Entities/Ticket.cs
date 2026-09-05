@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using ServiCore.Domain.Common;
+﻿using ServiCore.Domain.Common;
 using ServiCore.Domain.Enums;
 
 namespace ServiCore.Domain.Entities;
@@ -80,6 +74,11 @@ public class Ticket : Entity
                 "Ticket description is required.",
                 nameof(description));
 
+        if (!Enum.IsDefined(priority))
+            throw new ArgumentException(
+                "A valid ticket priority is required.",
+                nameof(priority));
+
         Id = Guid.NewGuid();
 
         OrganizationId = organizationId;
@@ -96,6 +95,55 @@ public class Ticket : Entity
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = CreatedAt;
     }
+
+    public void Update(
+        string title,
+        string description,
+        Guid categoryId,
+        TicketPriority priority)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            throw new ArgumentException(
+                "Ticket title is required.",
+                nameof(title));
+
+        if (string.IsNullOrWhiteSpace(description))
+            throw new ArgumentException(
+                "Ticket description is required.",
+                nameof(description));
+
+        if (categoryId == Guid.Empty)
+            throw new ArgumentException(
+                "Category ID is required.",
+                nameof(categoryId));
+
+        if (!Enum.IsDefined(priority))
+            throw new ArgumentException(
+                "A valid ticket priority is required.",
+                nameof(priority));
+
+        if (Status == TicketStatus.Closed)
+            throw new InvalidOperationException(
+                "A closed ticket cannot be updated.");
+
+        Title = title.Trim();
+        Description = description.Trim();
+        CategoryId = categoryId;
+        Priority = priority;
+
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Open()
+    {
+        if (Status != TicketStatus.New)
+            throw new InvalidOperationException(
+                "Only a new ticket can be opened.");
+
+        Status = TicketStatus.Open;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void AssignToAgent(Guid agentId)
     {
         if (agentId == Guid.Empty)

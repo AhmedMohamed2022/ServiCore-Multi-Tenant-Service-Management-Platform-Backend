@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using ServiCore.Application.Common.Interfaces;
 using ServiCore.Domain.Entities;
+using ServiCore.Domain.Enums;
 using ServiCore.Infrastructure.Identity;
 
 namespace ServiCore.Infrastructure.Persistence;
@@ -250,6 +251,88 @@ public class ServiCoreDbContext
                 (!excludingCategoryId.HasValue ||
                  x.Id != excludingCategoryId.Value),
             cancellationToken);
+    }
+    public void AddTicket(Ticket ticket)
+    {
+        Tickets.Add(ticket);
+    }
+
+    public async Task<IReadOnlyList<Ticket>> GetTicketsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Ticket?> GetTicketAsync(
+        Guid organizationId,
+        Guid ticketId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .FirstOrDefaultAsync(
+                x =>
+                    x.OrganizationId == organizationId &&
+                    x.Id == ticketId,
+                cancellationToken);
+    }
+
+    public async Task<bool> CustomerBelongsToOrganizationAsync(
+        Guid organizationId,
+        Guid customerId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Customers
+            .AnyAsync(
+                x =>
+                    x.Id == customerId &&
+                    x.OrganizationId == organizationId &&
+                    x.IsActive,
+                cancellationToken);
+    }
+
+    public async Task<bool> TeamBelongsToOrganizationAsync(
+        Guid organizationId,
+        Guid teamId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Teams
+            .AnyAsync(
+                x =>
+                    x.Id == teamId &&
+                    x.OrganizationId == organizationId &&
+                    x.IsActive,
+                cancellationToken);
+    }
+
+    public async Task<bool> CategoryBelongsToOrganizationAsync(
+        Guid organizationId,
+        Guid categoryId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Categories
+            .AnyAsync(
+                x =>
+                    x.Id == categoryId &&
+                    x.OrganizationId == organizationId &&
+                    x.IsActive,
+                cancellationToken);
+    }
+    public async Task<OrganizationRole?> GetOrganizationRoleAsync(
+    Guid organizationId,
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await OrganizationMembers
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.UserId == userId)
+            .Select(x => (OrganizationRole?)x.Role)
+            .SingleOrDefaultAsync(cancellationToken);
     }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

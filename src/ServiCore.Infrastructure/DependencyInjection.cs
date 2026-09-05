@@ -115,6 +115,27 @@ public static class DependencyInjection
                             OrganizationRole.Owner,
                             OrganizationRole.Manager));
                 });
+            options.AddPolicy(
+                "CanManageTickets",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+
+                    policy.Requirements.Add(
+                        new OrganizationRoleRequirement(
+                            OrganizationRole.Owner,
+                            OrganizationRole.Manager));
+                });
+            options.AddPolicy(
+                "CanWorkAssignedTickets",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+
+                    policy.AddRequirements(
+                        new OrganizationRoleRequirement(
+                            OrganizationRole.Agent));
+                });
         });
 
         services.AddScoped<IAuthorizationHandler, OrganizationRoleAuthorizationHandler>();

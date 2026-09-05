@@ -9,6 +9,8 @@ using ServiCore.Application.Organizations.Interfaces;
 using ServiCore.Application.Organizations.Services;
 using ServiCore.Application.Teams.Interfaces;
 using ServiCore.Application.Teams.Services;
+using ServiCore.Application.Tickets.Interfaces;
+using ServiCore.Application.Tickets.Services;
 
 namespace ServiCore.Application;
 
@@ -23,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<ITeamMembershipService, TeamMembershipService>();
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<ITicketService, TicketService>();
         return services;
     }
 }
