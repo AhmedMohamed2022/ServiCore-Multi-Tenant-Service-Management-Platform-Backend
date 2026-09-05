@@ -42,6 +42,11 @@ public class TicketComment : Entity
                 "Comment content is required.",
                 nameof(content));
 
+        if (content.Length > 5000)
+            throw new ArgumentException(
+                "Comment content cannot exceed 5000 characters.",
+                nameof(content));
+
         Id = Guid.NewGuid();
 
         TicketId = ticketId;

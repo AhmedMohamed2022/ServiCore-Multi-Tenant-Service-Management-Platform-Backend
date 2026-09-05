@@ -58,5 +58,20 @@ public interface IApplicationDbContext
 
     Task<bool> CategoryBelongsToOrganizationAsync(Guid organizationId, Guid categoryId, CancellationToken cancellationToken = default);
     Task<OrganizationRole?> GetOrganizationRoleAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
+    void AddTicketComment(TicketComment comment);
+
+    Task<IReadOnlyList<TicketComment>> GetTicketCommentsAsync(Guid organizationId, Guid ticketId, CancellationToken cancellationToken = default);
+
+    Task<bool> CustomerOwnsTicketAsync(Guid organizationId, Guid ticketId, Guid userId, CancellationToken cancellationToken = default);
+
+    void AddOrganizationInvitation(OrganizationInvitation invitation);
+
+    Task<OrganizationInvitation?> GetInvitationByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    Task<bool> PendingInvitationExistsAsync(Guid organizationId, string email, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<OrganizationInvitation>> GetOrganizationInvitationsAsync(Guid organizationId, CancellationToken cancellationToken = default);
+
+    Task<OrganizationInvitation?> GetOrganizationInvitationAsync(Guid organizationId, Guid invitationId, CancellationToken cancellationToken = default);
 
 }

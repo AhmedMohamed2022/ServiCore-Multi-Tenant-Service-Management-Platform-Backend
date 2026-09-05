@@ -19,6 +19,7 @@ public class ServiCoreDbContext
     }
 
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<OrganizationInvitation> OrganizationInvitations => Set<OrganizationInvitation>();
 
     public DbSet<OrganizationMember> OrganizationMembers
         => Set<OrganizationMember>();
@@ -89,7 +90,7 @@ public class ServiCoreDbContext
         TeamMembers.Add(member);
     }
 
-    public async Task<bool> OrganizationMemberExistsAsync(Guid organizationId,Guid userId,CancellationToken cancellationToken = default)
+    public async Task<bool> OrganizationMemberExistsAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
     {
         return await OrganizationMembers
             .AnyAsync(
@@ -333,6 +334,97 @@ public class ServiCoreDbContext
                 x.UserId == userId)
             .Select(x => (OrganizationRole?)x.Role)
             .SingleOrDefaultAsync(cancellationToken);
+    }
+    public void AddTicketComment(TicketComment comment)
+    {
+        TicketComments.Add(comment);
+    }
+    public async Task<IReadOnlyList<TicketComment>> GetTicketCommentsAsync(
+    Guid organizationId,
+    Guid ticketId,
+    CancellationToken cancellationToken = default)
+    {
+        return await TicketComments
+            .AsNoTracking()
+            .Where(comment =>
+                comment.TicketId == ticketId &&
+                Tickets.Any(ticket =>
+                    ticket.Id == comment.TicketId &&
+                    ticket.OrganizationId == organizationId))
+            .OrderBy(comment => comment.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+    public async Task<bool> CustomerOwnsTicketAsync(
+    Guid organizationId,
+    Guid ticketId,
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .AnyAsync(
+                ticket =>
+                    ticket.Id == ticketId &&
+                    ticket.OrganizationId == organizationId &&
+                    Customers.Any(customer =>
+                        customer.Id == ticket.CustomerId &&
+                        customer.OrganizationId == organizationId &&
+                        customer.UserId == userId),
+                cancellationToken);
+    }
+    public void AddOrganizationInvitation(
+    OrganizationInvitation invitation)
+    {
+        OrganizationInvitations.Add(invitation);
+    }
+    public async Task<OrganizationInvitation?> GetInvitationByTokenHashAsync(
+    string tokenHash,
+    CancellationToken cancellationToken = default)
+    {
+        return await OrganizationInvitations
+            .SingleOrDefaultAsync(
+                x => x.TokenHash == tokenHash,
+                cancellationToken);
+    }
+    public async Task<bool> PendingInvitationExistsAsync(
+    Guid organizationId,
+    string email,
+    CancellationToken cancellationToken = default)
+    {
+        email = email.Trim().ToLowerInvariant();
+
+        return await OrganizationInvitations
+            .AnyAsync(
+                x =>
+                    x.OrganizationId == organizationId &&
+                    x.Email == email &&
+                    x.AcceptedAt == null &&
+                    x.RevokedAt == null &&
+                    x.ExpiresAt > DateTime.UtcNow,
+                cancellationToken);
+    }
+    public async Task<IReadOnlyList<OrganizationInvitation>>
+    GetOrganizationInvitationsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await OrganizationInvitations
+            .AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+    public async Task<OrganizationInvitation?>
+    GetOrganizationInvitationAsync(
+        Guid organizationId,
+        Guid invitationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await OrganizationInvitations
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id == invitationId &&
+                    x.OrganizationId == organizationId,
+                cancellationToken);
     }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
