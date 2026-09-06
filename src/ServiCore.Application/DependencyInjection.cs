@@ -3,6 +3,8 @@ using ServiCore.Application.Authentication.Interfaces;
 using ServiCore.Application.Authentication.Services;
 using ServiCore.Application.Categories.Interfaces;
 using ServiCore.Application.Categories.Services;
+using ServiCore.Application.CustomerInvitations.Interfaces;
+using ServiCore.Application.CustomerInvitations.Services;
 using ServiCore.Application.Customers.Interfaces;
 using ServiCore.Application.Customers.Services;
 using ServiCore.Application.OrganizationInvitations.Interfaces;
@@ -30,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketService, TicketService>();
         services.AddScoped<ITicketCommentService, TicketCommentService>();
         services.AddScoped<IOrganizationInvitationService, OrganizationInvitationService>();
+        services.AddScoped<ICustomerInvitationService, CustomerInvitationService>();
         return services;
     }
 }

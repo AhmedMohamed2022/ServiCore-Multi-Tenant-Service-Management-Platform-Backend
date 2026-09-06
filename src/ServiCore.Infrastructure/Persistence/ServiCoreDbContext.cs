@@ -29,6 +29,7 @@ public class ServiCoreDbContext
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
 
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerInvitation> CustomerInvitations => Set<CustomerInvitation>();
 
     public DbSet<Category> Categories => Set<Category>();
 
@@ -423,6 +424,66 @@ public class ServiCoreDbContext
             .SingleOrDefaultAsync(
                 x =>
                     x.Id == invitationId &&
+                    x.OrganizationId == organizationId,
+                cancellationToken);
+    }
+
+    public void AddCustomerInvitation(
+    CustomerInvitation invitation)
+    {
+        CustomerInvitations.Add(invitation);
+    }
+
+    public async Task<CustomerInvitation?>
+        GetCustomerInvitationByTokenHashAsync(
+            string tokenHash,
+            CancellationToken cancellationToken = default)
+    {
+        return await CustomerInvitations
+            .SingleOrDefaultAsync(
+                x => x.TokenHash == tokenHash,
+                cancellationToken);
+    }
+
+    public async Task<bool> PendingCustomerInvitationExistsAsync(
+        Guid organizationId,
+        Guid customerId,
+        CancellationToken cancellationToken = default)
+    {
+        return await CustomerInvitations.AnyAsync(
+            x =>
+                x.OrganizationId == organizationId &&
+                x.CustomerId == customerId &&
+                x.AcceptedAt == null &&
+                x.RevokedAt == null &&
+                x.ExpiresAt > DateTime.UtcNow,
+            cancellationToken);
+    }
+
+    public async Task<CustomerInvitation?>
+        GetCustomerInvitationAsync(
+            Guid organizationId,
+            Guid invitationId,
+            CancellationToken cancellationToken = default)
+    {
+        return await CustomerInvitations
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id == invitationId &&
+                    x.OrganizationId == organizationId,
+                cancellationToken);
+    }
+
+    public async Task<Customer?>
+        GetCustomerForOrganizationAsync(
+            Guid organizationId,
+            Guid customerId,
+            CancellationToken cancellationToken = default)
+    {
+        return await Customers
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id == customerId &&
                     x.OrganizationId == organizationId,
                 cancellationToken);
     }

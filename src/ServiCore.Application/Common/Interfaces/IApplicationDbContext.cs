@@ -73,5 +73,13 @@ public interface IApplicationDbContext
     Task<IReadOnlyList<OrganizationInvitation>> GetOrganizationInvitationsAsync(Guid organizationId, CancellationToken cancellationToken = default);
 
     Task<OrganizationInvitation?> GetOrganizationInvitationAsync(Guid organizationId, Guid invitationId, CancellationToken cancellationToken = default);
+    void AddCustomerInvitation(CustomerInvitation invitation);
 
+    Task<CustomerInvitation?> GetCustomerInvitationByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default);
+
+    Task<bool> PendingCustomerInvitationExistsAsync(Guid organizationId, Guid customerId, CancellationToken cancellationToken = default);
+
+    Task<CustomerInvitation?> GetCustomerInvitationAsync(Guid organizationId, Guid invitationId, CancellationToken cancellationToken = default);
+
+    Task<Customer?> GetCustomerForOrganizationAsync(Guid organizationId, Guid customerId, CancellationToken cancellationToken = default);
 }

@@ -93,8 +93,13 @@ public class Customer : Entity
             throw new ArgumentException(
                 "User ID is required.",
                 nameof(userId));
+        if (UserId.HasValue && UserId.Value != userId)
+            throw new InvalidOperationException(
+                "Customer is already linked to another user.");
 
         UserId = userId;
         UpdatedAt = DateTime.UtcNow;
     }
+    public bool IsLinked =>
+    UserId.HasValue;
 }
