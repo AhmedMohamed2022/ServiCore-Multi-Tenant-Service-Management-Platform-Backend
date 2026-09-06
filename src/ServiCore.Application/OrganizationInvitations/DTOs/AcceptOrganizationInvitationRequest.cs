@@ -2,5 +2,4 @@
 
 public sealed record AcceptOrganizationInvitationRequest(
     string Token,
-    string Password,
-    string? UserName);
+    string Password);

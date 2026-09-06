@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using ServiCore.Domain.Enums;
 
-namespace ServiCore.Application.OrganizationInvitations.DTOs
-{
-    internal class InviteOrganizationMemberRequest
-    {
-    }
-}
+namespace ServiCore.Application.OrganizationInvitations.DTOs;
+
+public sealed record InviteOrganizationMemberRequest(
+    string Email,
+    OrganizationRole Role);

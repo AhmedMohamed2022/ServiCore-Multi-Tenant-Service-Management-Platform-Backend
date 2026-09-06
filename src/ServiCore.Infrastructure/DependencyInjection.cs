@@ -136,6 +136,17 @@ public static class DependencyInjection
                         new OrganizationRoleRequirement(
                             OrganizationRole.Agent));
                 });
+            options.AddPolicy(
+                "CanManageStaff",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+
+                    policy.AddRequirements(
+                        new OrganizationRoleRequirement(
+                            OrganizationRole.Owner,
+                            OrganizationRole.Manager));
+                });
         });
 
         services.AddScoped<IAuthorizationHandler, OrganizationRoleAuthorizationHandler>();
@@ -150,6 +161,7 @@ public static class DependencyInjection
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<ITokenService, JwtTokenService>();
         services.AddScoped<ITenantResolver, TenantResolver>();
+        services.AddScoped<IInvitationTokenService, InvitationTokenService>();
 
         return services;
     }

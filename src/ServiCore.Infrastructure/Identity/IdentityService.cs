@@ -71,4 +71,25 @@ public class IdentityService : IIdentityService
 
         return Result<Guid>.Success(user.Id);
     }
+    public async Task<Result<Guid>> GetUserIdByEmailAsync(
+    string email,
+    CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return Result<Guid>.Failure(
+                "Email is required.");
+        }
+
+        var user = await _userManager.FindByEmailAsync(
+            email.Trim());
+
+        if (user is null)
+        {
+            return Result<Guid>.Failure(
+                "User was not found.");
+        }
+
+        return Result<Guid>.Success(user.Id);
+    }
 }
