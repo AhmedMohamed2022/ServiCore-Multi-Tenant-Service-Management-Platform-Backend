@@ -202,6 +202,55 @@ public class ServiCoreDbContext
                  x.Id != excludingCustomerId.Value),
             cancellationToken);
     }
+    public async Task<IReadOnlyList<Ticket>> GetCustomerTicketsAsync(
+    Guid organizationId,
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId &&
+                Customers.Any(customer =>
+                    customer.Id == ticket.CustomerId &&
+                    customer.OrganizationId == organizationId &&
+                    customer.UserId == userId &&
+                    customer.IsActive))
+            .OrderByDescending(ticket => ticket.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+    public async Task<Ticket?> GetCustomerTicketAsync(
+    Guid organizationId,
+    Guid ticketId,
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .Where(ticket =>
+                ticket.Id == ticketId &&
+                ticket.OrganizationId == organizationId &&
+                Customers.Any(customer =>
+                    customer.Id == ticket.CustomerId &&
+                    customer.OrganizationId == organizationId &&
+                    customer.UserId == userId &&
+                    customer.IsActive))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+    public async Task<bool> CustomerBelongsToUserAsync(
+    Guid organizationId,
+    Guid customerId,
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Customers
+            .AnyAsync(
+                customer =>
+                    customer.Id == customerId &&
+                    customer.OrganizationId == organizationId &&
+                    customer.UserId == userId &&
+                    customer.IsActive,
+                cancellationToken);
+    }
     public void AddCategory(Category category)
     {
         Categories.Add(category);

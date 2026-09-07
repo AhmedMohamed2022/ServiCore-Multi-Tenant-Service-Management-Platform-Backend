@@ -20,20 +20,34 @@ public class TenantResolver : ITenantResolver
         Guid organizationId,
         CancellationToken cancellationToken = default)
     {
-        var exists = await _dbContext.OrganizationMembers
-            .AnyAsync(
-                x =>
-                    x.UserId == userId &&
-                    x.OrganizationId == organizationId,
-                cancellationToken);
+        var isOrganizationMember =
+            await _dbContext.OrganizationMembers
+                .AnyAsync(
+                    x =>
+                        x.UserId == userId &&
+                        x.OrganizationId == organizationId,
+                    cancellationToken);
 
-        if (!exists)
+        if (isOrganizationMember)
         {
-            return Result<Guid>.Failure(
-                "The user is not a member of this organization.");
+            return Result<Guid>.Success(organizationId);
         }
 
-        return Result<Guid>.Success(
-            organizationId);
+        var isCustomer =
+            await _dbContext.Customers
+                .AnyAsync(
+                    x =>
+                        x.UserId == userId &&
+                        x.OrganizationId == organizationId &&
+                        x.IsActive,
+                    cancellationToken);
+
+        if (isCustomer)
+        {
+            return Result<Guid>.Success(organizationId);
+        }
+
+        return Result<Guid>.Failure(
+            "The user does not have access to this organization.");
     }
 }

@@ -22,20 +22,45 @@ public sealed class TicketService : ITicketService
     }
 
     public async Task<TicketDto> CreateAsync(
-        CreateTicketRequest request,
-        CancellationToken cancellationToken = default)
+    CreateTicketRequest request,
+    CancellationToken cancellationToken = default)
     {
         var organizationId = GetOrganizationId();
+        var currentUserId = GetCurrentUserId();
 
-        var customerBelongsToOrganization =
-            await _dbContext.CustomerBelongsToOrganizationAsync(
-                organizationId,
-                request.CustomerId,
-                cancellationToken);
+        var isCustomer = await IsCustomerAsync(
+            organizationId,
+            cancellationToken);
 
-        if (!customerBelongsToOrganization)
-            throw new KeyNotFoundException(
-                "Customer was not found in the current organization.");
+        if (isCustomer)
+        {
+            var customerOwnsRequestedCustomer =
+                await _dbContext.CustomerBelongsToUserAsync(
+                    organizationId,
+                    request.CustomerId,
+                    currentUserId,
+                    cancellationToken);
+
+            if (!customerOwnsRequestedCustomer)
+            {
+                throw new UnauthorizedAccessException(
+                    "You can only create tickets for yourself.");
+            }
+        }
+        else
+        {
+            var customerBelongsToOrganization =
+                await _dbContext.CustomerBelongsToOrganizationAsync(
+                    organizationId,
+                    request.CustomerId,
+                    cancellationToken);
+
+            if (!customerBelongsToOrganization)
+            {
+                throw new KeyNotFoundException(
+                    "Customer was not found in the current organization.");
+            }
+        }
 
         var teamBelongsToOrganization =
             await _dbContext.TeamBelongsToOrganizationAsync(
@@ -74,29 +99,60 @@ public sealed class TicketService : ITicketService
     }
 
     public async Task<IReadOnlyList<TicketDto>> GetAllAsync(
-        CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default)
     {
         var organizationId = GetOrganizationId();
 
-        var tickets = await _dbContext.GetTicketsAsync(
-            organizationId,
-            cancellationToken);
+        IReadOnlyList<Ticket> tickets;
+
+        if (await IsCustomerAsync(
+                organizationId,
+                cancellationToken))
+        {
+            var userId = GetCurrentUserId();
+
+            tickets = await _dbContext.GetCustomerTicketsAsync(
+                organizationId,
+                userId,
+                cancellationToken);
+        }
+        else
+        {
+            tickets = await _dbContext.GetTicketsAsync(
+                organizationId,
+                cancellationToken);
+        }
 
         return tickets
             .Select(Map)
             .ToList();
     }
 
-    public async Task<TicketDto> GetByIdAsync(
-        Guid ticketId,
-        CancellationToken cancellationToken = default)
+    public async Task<TicketDto> GetByIdAsync(Guid ticketId, CancellationToken cancellationToken = default)
     {
         var organizationId = GetOrganizationId();
 
-        var ticket = await _dbContext.GetTicketAsync(
-            organizationId,
-            ticketId,
-            cancellationToken);
+        Ticket? ticket;
+
+        if (await IsCustomerAsync(
+                organizationId,
+                cancellationToken))
+        {
+            var userId = GetCurrentUserId();
+
+            ticket = await _dbContext.GetCustomerTicketAsync(
+                organizationId,
+                ticketId,
+                userId,
+                cancellationToken);
+        }
+        else
+        {
+            ticket = await _dbContext.GetTicketAsync(
+                organizationId,
+                ticketId,
+                cancellationToken);
+        }
 
         if (ticket is null)
             throw new KeyNotFoundException(
@@ -341,7 +397,20 @@ public sealed class TicketService : ITicketService
             ?? throw new UnauthorizedAccessException(
                 "The current user is not authenticated.");
     }
+    private async Task<bool> IsCustomerAsync(
+    Guid organizationId,
+    CancellationToken cancellationToken)
+    {
+        var userId = GetCurrentUserId();
 
+        var organizationRole =
+            await _dbContext.GetOrganizationRoleAsync(
+                organizationId,
+                userId,
+                cancellationToken);
+
+        return !organizationRole.HasValue;
+    }
     private static TicketDto Map(Ticket ticket)
     {
         return new TicketDto(
