@@ -87,4 +87,11 @@ public interface IApplicationDbContext
     Task<CustomerInvitation?> GetCustomerInvitationAsync(Guid organizationId, Guid invitationId, CancellationToken cancellationToken = default);
 
     Task<Customer?> GetCustomerForOrganizationAsync(Guid organizationId, Guid customerId, CancellationToken cancellationToken = default);
+    void AddNotification(Notification notification);
+
+    Task<IReadOnlyList<Notification>> GetNotificationsAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
+
+    Task<Notification?> GetNotificationAsync(Guid organizationId, Guid userId, Guid notificationId, CancellationToken cancellationToken = default);
+    Task<Guid?> GetTicketCustomerUserIdAsync(Guid organizationId, Guid ticketId, CancellationToken cancellationToken = default);
+
 }

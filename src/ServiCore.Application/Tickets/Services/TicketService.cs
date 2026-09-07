@@ -1,4 +1,6 @@
 ﻿using ServiCore.Application.Common.Interfaces;
+using ServiCore.Application.Notifications.DTOs;
+using ServiCore.Application.Notifications.Interfaces;
 using ServiCore.Application.Tickets.DTOs;
 using ServiCore.Application.Tickets.Interfaces;
 using ServiCore.Domain.Entities;
@@ -11,14 +13,14 @@ public sealed class TicketService : ITicketService
     private readonly IApplicationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUser _currentUser;
+    private readonly INotificationService _notificationService;
 
-    public TicketService(
-        IApplicationDbContext dbContext,
-        ITenantContext tenantContext, ICurrentUser currentUser)
+    public TicketService(IApplicationDbContext dbContext, ITenantContext tenantContext, ICurrentUser currentUser, INotificationService notificationService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
+        _notificationService = notificationService;
     }
 
     public async Task<TicketDto> CreateAsync(
@@ -262,6 +264,14 @@ public sealed class TicketService : ITicketService
         ticket.AssignToAgent(agentId);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await _notificationService.CreateAsync(
+            new CreateNotificationRequest(
+                UserId: agentId,
+                Type: NotificationType.TicketAssigned,
+                Title: "Ticket assigned",
+                Message: $"Ticket \"{ticket.Title}\" has been assigned to you.",
+                RelatedEntityId: ticket.Id),
+            cancellationToken);
 
         return Map(ticket);
     }
@@ -318,6 +328,8 @@ public sealed class TicketService : ITicketService
         Guid ticketId,
         CancellationToken cancellationToken = default)
     {
+        var organizationId = GetOrganizationId();
+
         var ticket = await GetTicketForAssignedAgentAsync(
             ticketId,
             cancellationToken);
@@ -325,6 +337,23 @@ public sealed class TicketService : ITicketService
         ticket.Resolve();
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        var customerUserId =
+    await _dbContext.GetTicketCustomerUserIdAsync(
+        organizationId,
+        ticket.Id,
+        cancellationToken);
+
+        if (customerUserId.HasValue)
+        {
+            await _notificationService.CreateAsync(
+                new CreateNotificationRequest(
+                    UserId: customerUserId.Value,
+                    Type: NotificationType.TicketResolved,
+                    Title: "Ticket resolved",
+                    Message: $"Your ticket \"{ticket.Title}\" has been resolved.",
+                    RelatedEntityId: ticket.Id),
+                cancellationToken);
+        }
 
         return Map(ticket);
     }
@@ -343,6 +372,23 @@ public sealed class TicketService : ITicketService
         ticket.Close();
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        var customerUserId =
+    await _dbContext.GetTicketCustomerUserIdAsync(
+        organizationId,
+        ticket.Id,
+        cancellationToken);
+
+        if (customerUserId.HasValue)
+        {
+            await _notificationService.CreateAsync(
+                new CreateNotificationRequest(
+                    UserId: customerUserId.Value,
+                    Type: NotificationType.TicketClosed,
+                    Title: "Ticket closed",
+                    Message: $"Your ticket \"{ticket.Title}\" has been closed.",
+                    RelatedEntityId: ticket.Id),
+                cancellationToken);
+        }
 
         return Map(ticket);
     }

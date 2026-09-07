@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using ServiCore.API.Hubs;
 using ServiCore.API.Middleware;
 using ServiCore.Application;
+using ServiCore.Application.Common.Interfaces;
 using ServiCore.Infrastructure;
 using ServiCore.Infrastructure.Persistence;
 
@@ -19,6 +21,9 @@ public partial class Program
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+        builder.Services.AddSignalR();
+
+        builder.Services.AddScoped<INotificationRealtimePublisher, NotificationRealtimePublisher>();
 
         var app = builder.Build();
 
@@ -37,6 +42,7 @@ public partial class Program
         app.UseAuthorization();
 
         app.MapControllers();
+        app.MapHub<NotificationHub>("/hubs/notifications");
         app.Run();
 
     }

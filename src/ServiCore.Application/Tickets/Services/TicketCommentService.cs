@@ -1,4 +1,6 @@
 ﻿using ServiCore.Application.Common.Interfaces;
+using ServiCore.Application.Notifications.DTOs;
+using ServiCore.Application.Notifications.Interfaces;
 using ServiCore.Application.Tickets.DTOs;
 using ServiCore.Application.Tickets.Interfaces;
 using ServiCore.Domain.Entities;
@@ -11,15 +13,17 @@ public class TicketCommentService : ITicketCommentService
     private readonly IApplicationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUser _currentUser;
-
+    private readonly INotificationService _notificationService;
     public TicketCommentService(
         IApplicationDbContext dbContext,
         ITenantContext tenantContext,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        INotificationService notificationService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
+        _notificationService = notificationService;
     }
 
     public async Task<TicketCommentDto> AddAsync(
@@ -67,6 +71,35 @@ public class TicketCommentService : ITicketCommentService
         _dbContext.AddTicketComment(comment);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        if (ticket.AssignedAgentId.HasValue)
+        {
+            await _notificationService.CreateAsync(
+                new CreateNotificationRequest(
+                    UserId: ticket.AssignedAgentId.Value,
+                    Type: NotificationType.TicketCommentAdded,
+                    Title: "New customer comment",
+                    Message: $"The customer added a new comment to ticket \"{ticket.Title}\".",
+                    RelatedEntityId: ticket.Id),
+                cancellationToken);
+        }
+        var customerUserId =
+    await _dbContext.GetTicketCustomerUserIdAsync(
+        organizationId,
+        ticket.Id,
+        cancellationToken);
+
+        if (customerUserId.HasValue &&
+            customerUserId.Value != userId)
+        {
+            await _notificationService.CreateAsync(
+                new CreateNotificationRequest(
+                    UserId: customerUserId.Value,
+                    Type: NotificationType.TicketCommentAdded,
+                    Title: "New ticket comment",
+                    Message: $"A support agent added a new comment to ticket \"{ticket.Title}\".",
+                    RelatedEntityId: ticket.Id),
+                cancellationToken);
+        }
 
         return Map(comment);
     }

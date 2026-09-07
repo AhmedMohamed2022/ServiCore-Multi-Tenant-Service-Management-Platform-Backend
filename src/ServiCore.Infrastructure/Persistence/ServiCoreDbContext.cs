@@ -32,6 +32,7 @@ public class ServiCoreDbContext
     public DbSet<CustomerInvitation> CustomerInvitations => Set<CustomerInvitation>();
 
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     public DbSet<Ticket> Tickets => Set<Ticket>();
 
@@ -535,6 +536,56 @@ public class ServiCoreDbContext
                     x.Id == customerId &&
                     x.OrganizationId == organizationId,
                 cancellationToken);
+    }
+    public void AddNotification(Notification notification)
+    {
+        Notifications.Add(notification);
+    }
+    public async Task<IReadOnlyList<Notification>> GetNotificationsAsync(
+    Guid organizationId,
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Notifications
+            .AsNoTracking()
+            .Where(notification =>
+                notification.OrganizationId == organizationId &&
+                notification.UserId == userId)
+            .OrderByDescending(notification => notification.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+    public async Task<Notification?> GetNotificationAsync(
+    Guid organizationId,
+    Guid userId,
+    Guid notificationId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Notifications
+            .FirstOrDefaultAsync(
+                notification =>
+                    notification.Id == notificationId &&
+                    notification.OrganizationId == organizationId &&
+                    notification.UserId == userId,
+                cancellationToken);
+    }
+    public async Task<Guid?> GetTicketCustomerUserIdAsync(
+    Guid organizationId,
+    Guid ticketId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .Where(ticket =>
+                ticket.Id == ticketId &&
+                ticket.OrganizationId == organizationId)
+            .Select(ticket =>
+                Customers
+                    .Where(customer =>
+                        customer.Id == ticket.CustomerId &&
+                        customer.OrganizationId == organizationId &&
+                        customer.IsActive)
+                    .Select(customer => customer.UserId)
+                    .FirstOrDefault())
+            .FirstOrDefaultAsync(cancellationToken);
     }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
