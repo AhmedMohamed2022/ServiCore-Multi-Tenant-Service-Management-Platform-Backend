@@ -1,4 +1,6 @@
-﻿using ServiCore.Application.Common.Interfaces;
+﻿using Microsoft.Extensions.Options;
+using ServiCore.Application.Common.Configuration;
+using ServiCore.Application.Common.Interfaces;
 using ServiCore.Application.CustomerInvitations.DTOs;
 using ServiCore.Application.CustomerInvitations.Interfaces;
 using ServiCore.Domain.Entities;
@@ -14,19 +16,24 @@ public class CustomerInvitationService
     private readonly ICurrentUser _currentUser;
     private readonly IInvitationTokenService _tokenService;
     private readonly IIdentityService _identityService;
-
+    private readonly IEmailSender _emailSender;
+    private readonly FrontendOptions _frontendOptions;
     public CustomerInvitationService(
         IApplicationDbContext dbContext,
         ITenantContext tenantContext,
         ICurrentUser currentUser,
         IInvitationTokenService tokenService,
-        IIdentityService identityService)
+        IIdentityService identityService,
+        IEmailSender emailSender,
+        IOptions<FrontendOptions> frontendOptions)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
         _tokenService = tokenService;
         _identityService = identityService;
+        _emailSender = emailSender;
+        _frontendOptions = frontendOptions.Value;
     }
 
     public async Task<string> InviteAsync(
@@ -102,8 +109,53 @@ public class CustomerInvitationService
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
-        // Development/testing only.
-        // Phase 11 can introduce actual email delivery.
+        var invitationUrl =
+    $"{_frontendOptions.BaseUrl.TrimEnd('/')}" +
+    $"/accept-customer-invitation?token=" +
+    Uri.EscapeDataString(token);
+
+        var emailBody = $"""
+                <h2>Welcome to ServiCore</h2>
+
+                <p>
+                    You have been invited to access your customer account
+                    on ServiCore.
+                </p>
+
+                <p>
+                    Click the button below to accept your invitation:
+                </p>
+
+                <p>
+                    <a href="{invitationUrl}"
+                       style="
+                           display:inline-block;
+                           padding:12px 20px;
+                           background:#2563eb;
+                           color:white;
+                           text-decoration:none;
+                           border-radius:6px;
+                       ">
+                        Accept Customer Invitation
+                    </a>
+                </p>
+
+                <p>
+                    This invitation expires on
+                    <strong>{invitation.ExpiresAt:u}</strong>.
+                </p>
+
+                <p>
+                    If you did not expect this invitation, you can safely ignore this email.
+                </p>
+                """;
+
+        await _emailSender.SendAsync(
+            invitation.Email,
+            "Your ServiCore customer invitation",
+            emailBody,
+            cancellationToken);
+
         return token;
     }
 

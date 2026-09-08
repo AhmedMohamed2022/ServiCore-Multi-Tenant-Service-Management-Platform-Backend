@@ -18,6 +18,7 @@ using ServiCore.Application.Teams.Services;
 using ServiCore.Application.Tickets.Interfaces;
 using ServiCore.Application.Tickets.Services;
 
+
 namespace ServiCore.Application;
 
 public static class DependencyInjection
@@ -35,7 +36,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketCommentService, TicketCommentService>();
         services.AddScoped<IOrganizationInvitationService, OrganizationInvitationService>();
         services.AddScoped<ICustomerInvitationService, CustomerInvitationService>();
-        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<INotificationService, NotificationService>();        
         return services;
     }
 }

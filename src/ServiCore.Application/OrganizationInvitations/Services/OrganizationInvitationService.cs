@@ -1,8 +1,11 @@
-﻿using ServiCore.Application.Common.Interfaces;
+﻿using ServiCore.Application.Common.Configuration;
+using ServiCore.Application.Common.Interfaces;
 using ServiCore.Application.OrganizationInvitations.DTOs;
 using ServiCore.Application.OrganizationInvitations.Interfaces;
 using ServiCore.Domain.Entities;
 using ServiCore.Domain.Enums;
+using Microsoft.Extensions.Options;
+
 
 namespace ServiCore.Application.OrganizationInvitations.Services;
 
@@ -16,19 +19,25 @@ public class OrganizationInvitationService : IOrganizationInvitationService
     private readonly ICurrentUser _currentUser;
     private readonly IIdentityService _identityService;
     private readonly IInvitationTokenService _tokenService;
-
+    private readonly IEmailSender _emailSender;
+    private readonly FrontendOptions _frontendOptions;
     public OrganizationInvitationService(
         IApplicationDbContext dbContext,
         ITenantContext tenantContext,
         ICurrentUser currentUser,
         IIdentityService identityService,
-        IInvitationTokenService tokenService)
+        IInvitationTokenService tokenService,
+        IEmailSender emailSender,
+        IOptions<FrontendOptions> frontendOptions
+        )
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
         _identityService = identityService;
         _tokenService = tokenService;
+        _emailSender = emailSender;
+        _frontendOptions = frontendOptions.Value;
     }
 
     public async Task<(OrganizationInvitationDto Invitation, string Token)>
@@ -123,6 +132,52 @@ public class OrganizationInvitationService : IOrganizationInvitationService
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
+        var invitationUrl =
+    $"{_frontendOptions.BaseUrl.TrimEnd('/')}" +
+    $"/accept-invitation?token=" +
+    Uri.EscapeDataString(token);
+
+        var emailBody = $"""
+                <h2>You have been invited to ServiCore</h2>
+
+                <p>
+                    You have been invited to join an organization on ServiCore
+                    as a <strong>{invitation.Role}</strong>.
+                </p>
+
+                <p>
+                    Click the button below to accept your invitation:
+                </p>
+
+                <p>
+                    <a href="{invitationUrl}"
+                       style="
+                           display:inline-block;
+                           padding:12px 20px;
+                           background:#2563eb;
+                           color:white;
+                           text-decoration:none;
+                           border-radius:6px;
+                       ">
+                        Accept Invitation
+                    </a>
+                </p>
+
+                <p>
+                    This invitation expires on
+                    <strong>{invitation.ExpiresAt:u}</strong>.
+                </p>
+
+                <p>
+                    If you did not expect this invitation, you can safely ignore this email.
+                </p>
+                """;
+
+        await _emailSender.SendAsync(
+            invitation.Email,
+            "You have been invited to ServiCore",
+            emailBody,
+            cancellationToken);
         return (
             Map(invitation),
             token);

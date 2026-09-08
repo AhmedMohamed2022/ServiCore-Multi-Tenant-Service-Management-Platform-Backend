@@ -5,11 +5,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using ServiCore.Application.Common.Configuration;
 using ServiCore.Application.Common.Interfaces;
 using ServiCore.Domain.Enums;
 using ServiCore.Infrastructure.Authentication;
 using ServiCore.Infrastructure.Authentication.Authorization;
 using ServiCore.Infrastructure.Common;
+using ServiCore.Infrastructure.Email;
 using ServiCore.Infrastructure.Identity;
 using ServiCore.Infrastructure.Persistence;
 using System;
@@ -162,6 +164,11 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, JwtTokenService>();
         services.AddScoped<ITenantResolver, TenantResolver>();
         services.AddScoped<IInvitationTokenService, InvitationTokenService>();
+
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.Configure<FrontendOptions>(configuration.GetSection(FrontendOptions.SectionName));
+
+        services.AddScoped<IEmailSender, EmailSender>();
 
         return services;
     }
