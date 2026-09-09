@@ -22,6 +22,17 @@ public partial class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
         builder.Services.AddSignalR();
+        
+        builder.Services.AddCors(options =>
+        {
+            options.AddDefaultPolicy(policy =>
+            {
+                policy.WithOrigins("http://localhost:4200")
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
+            });
+        });
 
         builder.Services.AddScoped<INotificationRealtimePublisher, NotificationRealtimePublisher>();
 
@@ -35,11 +46,12 @@ public partial class Program
         }
 
         app.UseHttpsRedirection();
-
+        app.UseCors();
         app.UseAuthentication();
         app.UseMiddleware<TenantResolutionMiddleware>();
 
         app.UseAuthorization();
+
 
         app.MapControllers();
         app.MapHub<NotificationHub>("/hubs/notifications");

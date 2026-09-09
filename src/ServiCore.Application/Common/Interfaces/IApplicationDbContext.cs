@@ -1,4 +1,5 @@
-﻿using ServiCore.Domain.Entities;
+﻿using ServiCore.Application.Reporting.Queries;
+using ServiCore.Domain.Entities;
 using ServiCore.Domain.Enums;
 using System;
 using System.Collections.Generic;
@@ -93,5 +94,12 @@ public interface IApplicationDbContext
 
     Task<Notification?> GetNotificationAsync(Guid organizationId, Guid userId, Guid notificationId, CancellationToken cancellationToken = default);
     Task<Guid?> GetTicketCustomerUserIdAsync(Guid organizationId, Guid ticketId, CancellationToken cancellationToken = default);
+    Task<DashboardTicketStatistics> GetDashboardTicketStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+
+    Task<OrganizationReportingCounts> GetOrganizationReportingCountsAsync(Guid organizationId, CancellationToken cancellationToken = default);
+    Task<TicketStatisticsQueryResult> GetTicketStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TeamStatisticsQueryResult>> GetTeamStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AgentStatisticsQueryResult>> GetAgentStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
 
 }

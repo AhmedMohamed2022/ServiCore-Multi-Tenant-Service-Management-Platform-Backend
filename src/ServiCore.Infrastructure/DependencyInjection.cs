@@ -149,6 +149,17 @@ public static class DependencyInjection
                             OrganizationRole.Owner,
                             OrganizationRole.Manager));
                 });
+            options.AddPolicy(
+                "CanViewReports",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+
+                    policy.AddRequirements(
+                        new OrganizationRoleRequirement(
+                            OrganizationRole.Owner,
+                            OrganizationRole.Manager));
+                });
         });
 
         services.AddScoped<IAuthorizationHandler, OrganizationRoleAuthorizationHandler>();
