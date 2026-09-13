@@ -22,7 +22,7 @@ public partial class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
         builder.Services.AddSignalR();
-        
+
         builder.Services.AddCors(options =>
         {
             options.AddDefaultPolicy(policy =>
@@ -35,6 +35,7 @@ public partial class Program
         });
 
         builder.Services.AddScoped<INotificationRealtimePublisher, NotificationRealtimePublisher>();
+        builder.Services.AddScoped<ITicketCommentRealtimePublisher, TicketCommentRealtimePublisher>();
 
         var app = builder.Build();
 

@@ -14,16 +14,20 @@ public class TicketCommentService : ITicketCommentService
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUser _currentUser;
     private readonly INotificationService _notificationService;
+    private readonly ITicketCommentRealtimePublisher _realtimePublisher;
+
     public TicketCommentService(
         IApplicationDbContext dbContext,
         ITenantContext tenantContext,
         ICurrentUser currentUser,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        ITicketCommentRealtimePublisher realtimePublisher)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
         _notificationService = notificationService;
+        _realtimePublisher = realtimePublisher;
     }
 
     public async Task<TicketCommentDto> AddAsync(
@@ -40,7 +44,8 @@ public class TicketCommentService : ITicketCommentService
             cancellationToken);
 
         if (ticket is null)
-            throw new KeyNotFoundException("Ticket not found.");
+            throw new KeyNotFoundException(
+                "Ticket not found.");
 
         if (ticket.Status == TicketStatus.Closed)
             throw new InvalidOperationException(
@@ -70,38 +75,63 @@ public class TicketCommentService : ITicketCommentService
 
         _dbContext.AddTicketComment(comment);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        if (ticket.AssignedAgentId.HasValue)
+        await _dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        var commentDto = Map(comment);
+
+        if (isTicketCustomer &&
+            ticket.AssignedAgentId.HasValue)
         {
+            var agentId = ticket.AssignedAgentId.Value;
+
             await _notificationService.CreateAsync(
                 new CreateNotificationRequest(
-                    UserId: ticket.AssignedAgentId.Value,
+                    UserId: agentId,
                     Type: NotificationType.TicketCommentAdded,
                     Title: "New customer comment",
-                    Message: $"The customer added a new comment to ticket \"{ticket.Title}\".",
+                    Message:
+                        $"The customer added a new comment to ticket \"{ticket.Title}\".",
                     RelatedEntityId: ticket.Id),
                 cancellationToken);
-        }
-        var customerUserId =
-    await _dbContext.GetTicketCustomerUserIdAsync(
-        organizationId,
-        ticket.Id,
-        cancellationToken);
 
-        if (customerUserId.HasValue &&
-            customerUserId.Value != userId)
+            await _realtimePublisher.PublishAsync(
+                agentId,
+                organizationId,
+                commentDto,
+                cancellationToken);
+        }
+
+        if (isOrganizationMember)
         {
-            await _notificationService.CreateAsync(
-                new CreateNotificationRequest(
-                    UserId: customerUserId.Value,
-                    Type: NotificationType.TicketCommentAdded,
-                    Title: "New ticket comment",
-                    Message: $"A support agent added a new comment to ticket \"{ticket.Title}\".",
-                    RelatedEntityId: ticket.Id),
-                cancellationToken);
+            var customerUserId =
+                await _dbContext.GetTicketCustomerUserIdAsync(
+                    organizationId,
+                    ticket.Id,
+                    cancellationToken);
+
+            if (customerUserId.HasValue &&
+                customerUserId.Value != userId)
+            {
+                await _notificationService.CreateAsync(
+                    new CreateNotificationRequest(
+                        UserId: customerUserId.Value,
+                        Type: NotificationType.TicketCommentAdded,
+                        Title: "New ticket comment",
+                        Message:
+                            $"A support agent added a new comment to ticket \"{ticket.Title}\".",
+                        RelatedEntityId: ticket.Id),
+                    cancellationToken);
+
+                await _realtimePublisher.PublishAsync(
+                    customerUserId.Value,
+                    organizationId,
+                    commentDto,
+                    cancellationToken);
+            }
         }
 
-        return Map(comment);
+        return commentDto;
     }
 
     public async Task<IReadOnlyList<TicketCommentDto>> GetAllAsync(
@@ -117,7 +147,8 @@ public class TicketCommentService : ITicketCommentService
             cancellationToken);
 
         if (ticket is null)
-            throw new KeyNotFoundException("Ticket not found.");
+            throw new KeyNotFoundException(
+                "Ticket not found.");
 
         var isOrganizationMember =
             await _dbContext.OrganizationMemberExistsAsync(
@@ -136,10 +167,11 @@ public class TicketCommentService : ITicketCommentService
             throw new UnauthorizedAccessException(
                 "You are not allowed to view comments on this ticket.");
 
-        var comments = await _dbContext.GetTicketCommentsAsync(
-            organizationId,
-            ticketId,
-            cancellationToken);
+        var comments =
+            await _dbContext.GetTicketCommentsAsync(
+                organizationId,
+                ticketId,
+                cancellationToken);
 
         return comments
             .Select(Map)
@@ -164,7 +196,8 @@ public class TicketCommentService : ITicketCommentService
         return _currentUser.UserId.Value;
     }
 
-    private static TicketCommentDto Map(TicketComment comment)
+    private static TicketCommentDto Map(
+        TicketComment comment)
     {
         return new TicketCommentDto(
             comment.Id,

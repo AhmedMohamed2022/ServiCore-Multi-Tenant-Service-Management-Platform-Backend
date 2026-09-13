@@ -954,6 +954,192 @@ public class ServiCoreDbContext
 
         return result;
     }
+    public async Task<IReadOnlyList<Organization>> GetOrganizationsForUserAsync(
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        return await OrganizationMembers
+            .Where(m => m.UserId == userId)
+            .Join(Organizations, m => m.OrganizationId, o => o.Id, (m, o) => o)
+            .OrderBy(o => o.Name)
+            .ToListAsync(cancellationToken);
+    }
+    public async Task<IReadOnlyList<CustomerStatisticsQueryResult>>
+    GetCustomerStatisticsAsync(
+        Guid organizationId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var ticketsQuery = Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await Customers
+            .AsNoTracking()
+            .Where(customer =>
+                customer.OrganizationId == organizationId &&
+                customer.IsActive)
+            .Select(customer => new CustomerStatisticsQueryResult(
+                customer.Id,
+                customer.Name,
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id),
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id &&
+                    (ticket.Status == TicketStatus.New ||
+                     ticket.Status == TicketStatus.Open ||
+                     ticket.Status == TicketStatus.InProgress ||
+                     ticket.Status == TicketStatus.WaitingForCustomer)),
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id &&
+                    ticket.Status == TicketStatus.Resolved),
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id &&
+                    ticket.Status == TicketStatus.Closed)
+            ))
+            .OrderByDescending(result => result.TotalTickets)
+            .ThenBy(result => result.CustomerName)
+            .ToListAsync(cancellationToken);
+
+        return result;
+    }
+    public async Task<IReadOnlyList<CategoryStatisticsQueryResult>>
+    GetCategoryStatisticsAsync(
+        Guid organizationId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var ticketsQuery = Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await Categories
+            .AsNoTracking()
+            .Where(category =>
+                category.OrganizationId == organizationId &&
+                category.IsActive)
+            .Select(category => new CategoryStatisticsQueryResult(
+                category.Id,
+                category.Name,
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id),
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id &&
+                    (ticket.Status == TicketStatus.New ||
+                     ticket.Status == TicketStatus.Open ||
+                     ticket.Status == TicketStatus.InProgress ||
+                     ticket.Status == TicketStatus.WaitingForCustomer)),
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id &&
+                    ticket.Status == TicketStatus.Resolved),
+
+                ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id &&
+                    ticket.Status == TicketStatus.Closed)
+            ))
+            .OrderByDescending(result => result.TotalTickets)
+            .ThenBy(result => result.CategoryName)
+            .ToListAsync(cancellationToken);
+
+        return result;
+    }
+    public async Task<IReadOnlyList<TicketTimeSeriesQueryResult>>
+    GetTicketTimeSeriesAsync(
+        Guid organizationId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var ticketsQuery = Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await ticketsQuery
+            .GroupBy(ticket => new
+            {
+                ticket.CreatedAt.Year,
+                ticket.CreatedAt.Month,
+                ticket.CreatedAt.Day
+            })
+            .Select(group => new TicketTimeSeriesQueryResult(
+                new DateTime(
+                    group.Key.Year,
+                    group.Key.Month,
+                    group.Key.Day),
+
+                group.Count(),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.New),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.Open),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.InProgress),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.WaitingForCustomer),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.Resolved),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.Closed)
+            ))
+            .OrderBy(result => result.Date)
+            .ToListAsync(cancellationToken);
+
+        return result;
+    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

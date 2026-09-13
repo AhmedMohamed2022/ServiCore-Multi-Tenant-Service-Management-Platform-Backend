@@ -14,4 +14,5 @@ public interface IOrganizationService
     Task<Result<OrganizationDto>> CreateAsync(
         string name,
         CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<OrganizationDto>>> GetMineAsync(Guid userId, CancellationToken cancellationToken = default);
 }

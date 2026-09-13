@@ -160,8 +160,7 @@ public sealed class ReportingService : IReportingService
             .ToList();
     }
 
-    public async Task<IReadOnlyList<AgentStatisticsDto>>
-    GetAgentStatisticsAsync(
+    public async Task<IReadOnlyList<AgentStatisticsDto>> GetAgentStatisticsAsync(
         ReportDateRangeRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -188,6 +187,87 @@ public sealed class ReportingService : IReportingService
             .ToList();
     }
 
+    public async Task<IReadOnlyList<CustomerStatisticsDto>> GetCustomerStatisticsAsync(
+        ReportDateRangeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDateRange(request);
+
+        var organizationId = GetOrganizationId();
+
+        var result =
+            await _dbContext.GetCustomerStatisticsAsync(
+                organizationId,
+                request.From,
+                request.To,
+                cancellationToken);
+
+        return result
+            .Select(customer =>
+                new CustomerStatisticsDto(
+                    customer.CustomerId,
+                    customer.CustomerName,
+                    customer.TotalTickets,
+                    customer.ActiveTickets,
+                    customer.ResolvedTickets,
+                    customer.ClosedTickets))
+            .ToList();
+    }
+    public async Task<IReadOnlyList<CategoryStatisticsDto>> GetCategoryStatisticsAsync(
+        ReportDateRangeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDateRange(request);
+
+        var organizationId = GetOrganizationId();
+
+        var result =
+            await _dbContext.GetCategoryStatisticsAsync(
+                organizationId,
+                request.From,
+                request.To,
+                cancellationToken);
+
+        return result
+            .Select(category =>
+                new CategoryStatisticsDto(
+                    category.CategoryId,
+                    category.CategoryName,
+                    category.TotalTickets,
+                    category.ActiveTickets,
+                    category.ResolvedTickets,
+                    category.ClosedTickets))
+            .ToList();
+    }
+    public async Task<IReadOnlyList<TicketTimeSeriesDto>>
+    GetTicketTimeSeriesAsync(
+        ReportDateRangeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateDateRange(request);
+
+        var organizationId = GetOrganizationId();
+
+        var result =
+            await _dbContext.GetTicketTimeSeriesAsync(
+                organizationId,
+                request.From,
+                request.To,
+                cancellationToken);
+
+        return result
+            .Select(statistic =>
+                new TicketTimeSeriesDto(
+                    statistic.Date,
+                    statistic.TotalTickets,
+                    statistic.NewTickets,
+                    statistic.OpenTickets,
+                    statistic.InProgressTickets,
+                    statistic.WaitingForCustomerTickets,
+                    statistic.ResolvedTickets,
+                    statistic.ClosedTickets))
+            .ToList();
+    }
     private Guid GetOrganizationId()
     {
         return _tenantContext.OrganizationId

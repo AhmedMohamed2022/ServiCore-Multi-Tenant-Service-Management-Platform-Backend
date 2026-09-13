@@ -38,4 +38,16 @@ public class OrganizationService : IOrganizationService
 
         return Result<OrganizationDto>.Success(result);
     }
+    public async Task<Result<IReadOnlyList<OrganizationDto>>> GetMineAsync(
+    Guid userId,
+    CancellationToken cancellationToken = default)
+    {
+        var organizations = await _dbContext.GetOrganizationsForUserAsync(userId, cancellationToken);
+
+        var result = organizations
+            .Select(o => new OrganizationDto(o.Id, o.Name, o.CreatedAt))
+            .ToList() as IReadOnlyList<OrganizationDto>;
+
+        return Result<IReadOnlyList<OrganizationDto>>.Success(result);
+    }
 }

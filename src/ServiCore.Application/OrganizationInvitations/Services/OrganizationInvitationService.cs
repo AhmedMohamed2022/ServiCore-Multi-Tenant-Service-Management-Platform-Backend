@@ -40,8 +40,7 @@ public class OrganizationInvitationService : IOrganizationInvitationService
         _frontendOptions = frontendOptions.Value;
     }
 
-    public async Task<(OrganizationInvitationDto Invitation, string Token)>
-        InviteAsync(
+    public async Task<(OrganizationInvitationDto Invitation, string Token)> InviteAsync(
             InviteOrganizationMemberRequest request,
             CancellationToken cancellationToken = default)
     {

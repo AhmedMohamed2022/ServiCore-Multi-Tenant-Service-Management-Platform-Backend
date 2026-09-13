@@ -32,8 +32,14 @@ public class NotificationRealtimePublisher
             notification.ReadAt,
             notification.IsRead);
 
-        return _hubContext.Clients
-            .User(notification.UserId.ToString())
+        var groupName =
+            NotificationHub.GetUserGroupName(
+                notification.OrganizationId,
+                notification.UserId);
+
+        return _hubContext
+            .Clients
+            .Group(groupName)
             .SendAsync(
                 NotificationReceivedEvent,
                 payload,

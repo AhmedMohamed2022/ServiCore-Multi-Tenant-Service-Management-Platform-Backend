@@ -69,4 +69,43 @@ public class ReportsController : ControllerBase
 
         return Ok(result);
     }
+    [HttpGet("customers")]
+    public async Task<ActionResult<IReadOnlyList<CustomerStatisticsDto>>>
+    GetCustomerStatistics(
+        [FromQuery] ReportDateRangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result =
+            await _reportingService.GetCustomerStatisticsAsync(
+                request,
+                cancellationToken);
+
+        return Ok(result);
+    }
+    [HttpGet("categories")]
+    public async Task<ActionResult<IReadOnlyList<CategoryStatisticsDto>>>
+    GetCategoryStatistics(
+        [FromQuery] ReportDateRangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result =
+            await _reportingService.GetCategoryStatisticsAsync(
+                request,
+                cancellationToken);
+
+        return Ok(result);
+    }
+    [HttpGet("tickets/time-series")]
+    public async Task<ActionResult<IReadOnlyList<TicketTimeSeriesDto>>>
+    GetTicketTimeSeries(
+        [FromQuery] ReportDateRangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result =
+            await _reportingService.GetTicketTimeSeriesAsync(
+                request,
+                cancellationToken);
+
+        return Ok(result);
+    }
 }

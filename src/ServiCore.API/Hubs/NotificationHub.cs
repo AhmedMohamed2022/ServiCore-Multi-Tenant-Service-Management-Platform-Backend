@@ -8,6 +8,7 @@ namespace ServiCore.API.Hubs;
 public class NotificationHub : Hub
 {
     private const string OrganizationHeader = "X-Organization-Id";
+    private const string OrganizationQueryParam = "organizationId";
 
     private readonly ITenantResolver _tenantResolver;
 
@@ -29,14 +30,15 @@ public class NotificationHub : Hub
 
         var httpContext = Context.GetHttpContext();
 
-        var organizationHeader =
-            httpContext?
-                .Request
-                .Headers[OrganizationHeader]
-                .FirstOrDefault();
+        // WebSocket/SSE transports can't carry custom headers from the
+        // browser, so the org id travels as a query string parameter —
+        // the header is kept only as a fallback for HTTP-based transports.
+        var organizationValue =
+            httpContext?.Request.Query[OrganizationQueryParam].FirstOrDefault()
+            ?? httpContext?.Request.Headers[OrganizationHeader].FirstOrDefault();
 
         if (!Guid.TryParse(
-                organizationHeader,
+                organizationValue,
                 out var organizationId))
         {
             Context.Abort();
@@ -54,6 +56,15 @@ public class NotificationHub : Hub
             return;
         }
 
+        var groupName = GetUserGroupName(
+            organizationId,
+            parsedUserId);
+
+        await Groups.AddToGroupAsync(
+            Context.ConnectionId,
+            groupName,
+            Context.ConnectionAborted);
+
         await base.OnConnectedAsync();
     }
 
@@ -61,5 +72,12 @@ public class NotificationHub : Hub
         Exception? exception)
     {
         await base.OnDisconnectedAsync(exception);
+    }
+
+    public static string GetUserGroupName(
+        Guid organizationId,
+        Guid userId)
+    {
+        return $"organization:{organizationId}:user:{userId}";
     }
 }

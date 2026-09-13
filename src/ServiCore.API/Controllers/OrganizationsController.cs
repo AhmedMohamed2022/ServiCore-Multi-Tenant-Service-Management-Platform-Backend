@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using ServiCore.Application.Organizations.DTOs;
 using ServiCore.Application.Organizations.Interfaces;
+using System.Security.Claims;
 
 namespace ServiCore.API.Controllers;
 
@@ -35,5 +37,13 @@ public class OrganizationsController : ControllerBase
             nameof(Create),
             new { id = result.Value!.Id },
             result.Value);
+    }
+    [Authorize]
+    [HttpGet("mine")]
+    public async Task<IActionResult> Mine(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _organizationService.GetMineAsync(userId, cancellationToken);
+        return Ok(result.Value);
     }
 }

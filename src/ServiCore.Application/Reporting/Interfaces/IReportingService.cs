@@ -19,4 +19,15 @@ public interface IReportingService
     Task<IReadOnlyList<AgentStatisticsDto>> GetAgentStatisticsAsync(
         ReportDateRangeRequest request,
         CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CustomerStatisticsDto>> GetCustomerStatisticsAsync(
+        ReportDateRangeRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<CategoryStatisticsDto>> GetCategoryStatisticsAsync(
+            ReportDateRangeRequest request,
+            CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TicketTimeSeriesDto>>
+    GetTicketTimeSeriesAsync(
+        ReportDateRangeRequest request,
+        CancellationToken cancellationToken = default);
 }

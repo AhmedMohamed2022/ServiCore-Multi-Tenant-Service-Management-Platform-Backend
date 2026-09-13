@@ -101,5 +101,11 @@ public interface IApplicationDbContext
     Task<IReadOnlyList<TeamStatisticsQueryResult>> GetTeamStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AgentStatisticsQueryResult>> GetAgentStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Organization>> GetOrganizationsForUserAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CustomerStatisticsQueryResult>> GetCustomerStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CategoryStatisticsQueryResult>> GetCategoryStatisticsAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TicketTimeSeriesQueryResult>> GetTicketTimeSeriesAsync(Guid organizationId, DateTime? from, DateTime? to, CancellationToken cancellationToken = default);
+
+
 
 }

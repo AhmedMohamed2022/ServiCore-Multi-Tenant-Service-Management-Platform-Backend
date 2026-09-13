@@ -91,6 +91,25 @@ public static class DependencyInjection
 
                 ClockSkew = TimeSpan.FromMinutes(1)
             };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                // WebSocket/SSE can't send the Authorization header, so
+                // SignalR puts the token in the query string instead —
+                // this is the only place that's read from for hub routes.
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
         services.AddAuthorization(options =>
