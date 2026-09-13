@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ServiCore.Application.Customers.DTOs;
 using ServiCore.Application.Customers.Interfaces;
+using System.Security.Claims;
 
 namespace ServiCore.API.Controllers;
 
@@ -16,6 +17,34 @@ public class CustomersController : ControllerBase
         ICustomerService customerService)
     {
         _customerService = customerService;
+    }
+
+    // Not tenant-scoped on purpose — this is how a newly-logged-in customer
+    // (who has no X-Organization-Id yet) discovers which organization(s)
+    // they belong to. Registered as exempt in TenantResolutionMiddleware.
+    // Must stay above the "{customerId:guid}" route only for readability;
+    // the :guid constraint already means "mine" can never match it.
+    [HttpGet("mine")]
+    public async Task<IActionResult> Mine(
+        CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        var result =
+            await _customerService.GetMineAsync(
+                userId,
+                cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return BadRequest(new
+            {
+                error = result.Error
+            });
+        }
+
+        return Ok(result.Value);
     }
 
     [HttpPost]

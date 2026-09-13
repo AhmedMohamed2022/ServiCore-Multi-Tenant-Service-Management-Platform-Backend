@@ -9,6 +9,13 @@ using System.Threading.Tasks;
 
 namespace ServiCore.Application.Common.Interfaces;
 
+// Result row for GetCustomerMembershipsForUserAsync: one entry per
+// organization a Customer record links the current user to.
+public sealed record CustomerOrganizationMembership(
+    Guid CustomerId,
+    Guid OrganizationId,
+    string OrganizationName);
+
 public interface IApplicationDbContext
 {
     void AddOrganization(Organization organization);
@@ -88,6 +95,7 @@ public interface IApplicationDbContext
     Task<CustomerInvitation?> GetCustomerInvitationAsync(Guid organizationId, Guid invitationId, CancellationToken cancellationToken = default);
 
     Task<Customer?> GetCustomerForOrganizationAsync(Guid organizationId, Guid customerId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CustomerOrganizationMembership>> GetCustomerMembershipsForUserAsync(Guid userId, CancellationToken cancellationToken = default);
     void AddNotification(Notification notification);
 
     Task<IReadOnlyList<Notification>> GetNotificationsAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);

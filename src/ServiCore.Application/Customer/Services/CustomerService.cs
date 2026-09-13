@@ -190,6 +190,25 @@ public class CustomerService : ICustomerService
         return Result.Success();
     }
 
+    public async Task<Result<IReadOnlyList<CustomerMembershipDto>>> GetMineAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var memberships =
+            await _dbContext.GetCustomerMembershipsForUserAsync(
+                userId,
+                cancellationToken);
+
+        var result = memberships
+            .Select(m => new CustomerMembershipDto(
+                m.CustomerId,
+                m.OrganizationId,
+                m.OrganizationName))
+            .ToList() as IReadOnlyList<CustomerMembershipDto>;
+
+        return Result<IReadOnlyList<CustomerMembershipDto>>.Success(result);
+    }
+
     private async Task<Result<Customer>> GetActiveCustomerAsync(
         Guid customerId,
         CancellationToken cancellationToken)
