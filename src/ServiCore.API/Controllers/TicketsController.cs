@@ -40,6 +40,12 @@ public class TicketsController : ControllerBase
                 message = ex.Message
             });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
+        }
     }
 
     [HttpGet]

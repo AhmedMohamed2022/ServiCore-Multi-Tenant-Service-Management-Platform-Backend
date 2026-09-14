@@ -17,6 +17,8 @@ public class TenantResolutionMiddleware
         "/api/customers/mine", // same reasoning as organizations/mine: a
                                // customer has no tenant header yet the
                                // first time they need to call this.
+        "/api/organization/invitations/accept",
+        "/api/customer-invitations/accept",
         "/hubs", // SignalR hubs resolve tenant themselves (see
                  // NotificationHub.OnConnectedAsync). A WebSocket upgrade
                  // can't carry the X-Organization-Id header, so the generic

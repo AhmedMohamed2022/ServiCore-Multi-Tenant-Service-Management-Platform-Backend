@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ServiCore.Application.Organizations.DTOs;
 using ServiCore.Infrastructure.Persistence;
@@ -7,49 +8,34 @@ using ServiCore.IntegrationTests.Infrastructure;
 
 namespace ServiCore.IntegrationTests;
 
-public class OrganizationsApiTests
+public sealed class OrganizationsApiTests
 {
     [Fact]
-    public async Task CreateOrganization_Should_Persist_Organization()
+    public async Task CreateOrganization_ShouldPersistOrganization()
     {
-        await using var factory =
-            new IntegrationTestWebApplicationFactory();
-
+        await using var factory = new IntegrationTestWebApplicationFactory();
         await factory.ResetDatabaseAsync();
-
         using var client = factory.CreateClient();
-
-        var request = new CreateOrganizationRequest(
-            "Acme Support");
 
         var response = await client.PostAsJsonAsync(
             "/api/organizations",
-            request);
+            new CreateOrganizationRequest("Acme Support"));
 
-        Assert.Equal(
-            HttpStatusCode.Created,
-            response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
-        var createdOrganization =
-            await response.Content
-                .ReadFromJsonAsync<OrganizationDto>();
+        var created = await response.Content
+            .ReadFromJsonAsync<OrganizationDto>();
 
-        Assert.NotNull(createdOrganization);
-        Assert.Equal("Acme Support", createdOrganization.Name);
+        Assert.NotNull(created);
+        Assert.Equal("Acme Support", created.Name);
 
         using var scope = factory.Services.CreateScope();
-
-        var dbContext = scope.ServiceProvider
+        var db = scope.ServiceProvider
             .GetRequiredService<ServiCoreDbContext>();
 
-        var persistedOrganization =
-            await dbContext.Organizations.FindAsync(
-                createdOrganization.Id);
+        var persisted = await db.Organizations
+            .SingleAsync(x => x.Id == created.Id);
 
-        Assert.NotNull(persistedOrganization);
-
-        Assert.Equal(
-            "Acme Support",
-            persistedOrganization.Name);
+        Assert.Equal("Acme Support", persisted.Name);
     }
 }
