@@ -32,9 +32,8 @@ public class CustomerInvitationsController : ControllerBase
 
             return Ok(new
             {
-                message =
-                    "Customer invitation created.",
-                token
+                message ="Customer invitation created.",
+                
             });
         }
         catch (UnauthorizedAccessException ex)

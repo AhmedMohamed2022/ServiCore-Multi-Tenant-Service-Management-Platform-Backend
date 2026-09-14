@@ -35,8 +35,20 @@ public static class DependencyInjection
         services.AddIdentityCore<ApplicationUser>(options =>
         {
             options.User.RequireUniqueEmail = true;
-        }).AddSignInManager()
+
+            options.Password.RequireDigit = true;
+            options.Password.RequireLowercase = true;
+            options.Password.RequireUppercase = true;
+            options.Password.RequireNonAlphanumeric = true;
+            options.Password.RequiredLength = 8;
+
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan =
+                TimeSpan.FromMinutes(15);
+        })
+        .AddSignInManager()
         .AddEntityFrameworkStores<ServiCoreDbContext>();
+
 
         var jwtSection = configuration.GetSection(
     JwtOptions.SectionName);
@@ -72,6 +84,11 @@ public static class DependencyInjection
             configuration["JWT_SECRET_KEY"]
             ?? throw new InvalidOperationException(
                 "JWT secret key is not configured.");
+        if (secretKey.Length < 32)
+        {
+            throw new InvalidOperationException(
+                "JWT secret key must be at least 32 characters long.");
+        }
 
         options.TokenValidationParameters =
             new TokenValidationParameters

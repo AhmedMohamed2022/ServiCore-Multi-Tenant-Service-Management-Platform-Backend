@@ -17,6 +17,8 @@ public sealed class IntegrationTestWebApplicationFactory
 
     public static readonly string TestJwtSecret =
         "IntegrationTestsOnly-ServiCore-Secret-Key-1234567890!";
+    public TestEmailSender TestEmails =>
+    Services.GetRequiredService<TestEmailSender>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -48,7 +50,11 @@ public sealed class IntegrationTestWebApplicationFactory
             if (emailDescriptor is not null)
                 services.Remove(emailDescriptor);
 
-            services.AddSingleton<IEmailSender, TestEmailSender>();
+            services.AddSingleton<TestEmailSender>();
+
+            services.AddSingleton<IEmailSender>(
+                provider =>
+                    provider.GetRequiredService<TestEmailSender>());
         });
     }
 
@@ -82,6 +88,10 @@ public sealed class TestEmailSender : IEmailSender
             htmlBody));
 
         return Task.CompletedTask;
+    }
+    public void Clear()
+    {
+        _messages.Clear();
     }
 }
 
