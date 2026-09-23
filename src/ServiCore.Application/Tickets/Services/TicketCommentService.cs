@@ -64,6 +64,17 @@ public class TicketCommentService : ITicketCommentService
                 userId,
                 cancellationToken);
 
+        if (isOrganizationMember &&
+            !await CanOrganizationMemberAccessTicketAsync(
+                organizationId,
+                ticket,
+                userId,
+                cancellationToken))
+        {
+            throw new UnauthorizedAccessException(
+                "You are not allowed to comment on this ticket.");
+        }
+
         if (!isOrganizationMember && !isTicketCustomer)
             throw new UnauthorizedAccessException(
                 "You are not allowed to comment on this ticket.");
@@ -163,6 +174,17 @@ public class TicketCommentService : ITicketCommentService
                 userId,
                 cancellationToken);
 
+        if (isOrganizationMember &&
+            !await CanOrganizationMemberAccessTicketAsync(
+                organizationId,
+                ticket,
+                userId,
+                cancellationToken))
+        {
+            throw new UnauthorizedAccessException(
+                "You are not allowed to view comments on this ticket.");
+        }
+
         if (!isOrganizationMember && !isTicketCustomer)
             throw new UnauthorizedAccessException(
                 "You are not allowed to view comments on this ticket.");
@@ -176,6 +198,39 @@ public class TicketCommentService : ITicketCommentService
         return comments
             .Select(Map)
             .ToList();
+    }
+
+    private async Task<bool> CanOrganizationMemberAccessTicketAsync(
+        Guid organizationId,
+        Ticket ticket,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        if (role == OrganizationRole.Owner)
+            return true;
+
+        if (role == OrganizationRole.Manager)
+        {
+            if (!ticket.TeamId.HasValue)
+                return true;
+
+            return await _dbContext.TeamMemberExistsAsync(
+                ticket.TeamId.Value,
+                userId,
+                cancellationToken);
+        }
+
+        if (role == OrganizationRole.Agent)
+        {
+            return ticket.AssignedAgentId == userId;
+        }
+
+        return false;
     }
 
     private Guid GetOrganizationId()

@@ -9,7 +9,7 @@ public class Ticket : Entity
 
     public Guid CustomerId { get; private set; }
 
-    public Guid TeamId { get; private set; }
+    public Guid? TeamId { get; private set; }
 
     public Guid? AssignedAgentId { get; private set; }
 
@@ -38,7 +38,7 @@ public class Ticket : Entity
     public Ticket(
         Guid organizationId,
         Guid customerId,
-        Guid teamId,
+        Guid? teamId,
         Guid categoryId,
         string title,
         string description,
@@ -56,7 +56,7 @@ public class Ticket : Entity
 
         if (teamId == Guid.Empty)
             throw new ArgumentException(
-                "Team ID is required.",
+                "Team ID must be a valid ID when provided.",
                 nameof(teamId));
 
         if (categoryId == Guid.Empty)
@@ -136,11 +136,40 @@ public class Ticket : Entity
 
     public void Open()
     {
+        if (!TeamId.HasValue)
+            throw new InvalidOperationException(
+                "A ticket must be assigned to a team before it can be opened.");
+
         if (Status != TicketStatus.New)
             throw new InvalidOperationException(
                 "Only a new ticket can be opened.");
 
         Status = TicketStatus.Open;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AssignToTeam(Guid teamId)
+    {
+        if (teamId == Guid.Empty)
+            throw new ArgumentException(
+                "Team ID is required.",
+                nameof(teamId));
+
+        if (Status != TicketStatus.New &&
+            Status != TicketStatus.Open)
+            throw new InvalidOperationException(
+                "A ticket can only be assigned to a team before work starts.");
+
+        if (AssignedAgentId.HasValue &&
+            TeamId != teamId)
+            throw new InvalidOperationException(
+                "Unassign the current agent before changing the ticket's team.");
+
+        TeamId = teamId;
+
+        if (Status == TicketStatus.New)
+            Status = TicketStatus.Open;
+
         UpdatedAt = DateTime.UtcNow;
     }
 
@@ -150,6 +179,10 @@ public class Ticket : Entity
             throw new ArgumentException(
                 "Agent ID is required.",
                 nameof(agentId));
+
+        if (!TeamId.HasValue)
+            throw new InvalidOperationException(
+                "A ticket must be assigned to a team before an agent can be assigned.");
 
         if (Status == TicketStatus.Closed)
             throw new InvalidOperationException(
@@ -218,5 +251,19 @@ public class Ticket : Entity
         Status = TicketStatus.Closed;
         ClosedAt = DateTime.UtcNow;
         UpdatedAt = ClosedAt.Value;
+    }
+    public void UnassignTeam()
+    {
+        if (Status == TicketStatus.Closed)
+            throw new InvalidOperationException(
+                "A closed ticket cannot be unassigned from a team.");
+
+        if (AssignedAgentId.HasValue)
+            throw new InvalidOperationException(
+                "Unassign the current agent before removing the ticket's team.");
+
+        TeamId = null;
+        Status = TicketStatus.New;
+        UpdatedAt = DateTime.UtcNow;
     }
 }

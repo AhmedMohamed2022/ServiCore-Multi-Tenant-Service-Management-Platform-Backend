@@ -18,7 +18,7 @@ public class TeamMembersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Policy = "CanManageTeams")]
+    [Authorize(Policy = "CanManageTeamMembership")]
     public async Task<IActionResult> Add(
         Guid teamId,
         [FromBody] AddTeamMemberRequest request,
@@ -63,7 +63,7 @@ public class TeamMembersController : ControllerBase
     }
 
     [HttpDelete("{userId:guid}")]
-    [Authorize(Policy = "CanManageTeams")]
+    [Authorize(Policy = "CanManageTeamMembership")]
     public async Task<IActionResult> Remove(
         Guid teamId,
         Guid userId,

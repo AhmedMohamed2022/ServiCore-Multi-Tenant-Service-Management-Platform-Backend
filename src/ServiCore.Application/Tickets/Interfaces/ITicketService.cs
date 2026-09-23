@@ -9,6 +9,10 @@ public interface ITicketService
         CreateTicketRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<TicketDto> CreateForCustomerAsync(
+        CreateCustomerTicketRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<TicketDto>> GetAllAsync(
         CancellationToken cancellationToken = default);
 
@@ -24,6 +28,14 @@ public interface ITicketService
     Task<TicketDto> OpenAsync(
         Guid ticketId,
         CancellationToken cancellationToken = default);
+
+    Task<TicketDto> AssignTeamAsync(
+        Guid ticketId,
+        Guid teamId,
+        CancellationToken cancellationToken = default);
+    Task<TicketDto> UnassignTeamAsync(
+    Guid ticketId,
+    CancellationToken cancellationToken = default);
     Task<TicketDto> AssignAsync(
     Guid ticketId,
     Guid agentId,

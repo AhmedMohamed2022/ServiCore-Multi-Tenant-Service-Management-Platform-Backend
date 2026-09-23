@@ -24,45 +24,28 @@ public sealed class TicketService : ITicketService
     }
 
     public async Task<TicketDto> CreateAsync(
-    CreateTicketRequest request,
-    CancellationToken cancellationToken = default)
+        CreateTicketRequest request,
+        CancellationToken cancellationToken = default)
     {
         var organizationId = GetOrganizationId();
         var currentUserId = GetCurrentUserId();
 
-        var isCustomer = await IsCustomerAsync(
+        var customerBelongsToOrganization =
+            await _dbContext.CustomerBelongsToOrganizationAsync(
+                organizationId,
+                request.CustomerId,
+                cancellationToken);
+
+        if (!customerBelongsToOrganization)
+        {
+            throw new KeyNotFoundException(
+                "Customer was not found in the current organization.");
+        }
+
+        await EnsureCanCreateStaffTicketAsync(
             organizationId,
+            currentUserId,
             cancellationToken);
-
-        if (isCustomer)
-        {
-            var customerOwnsRequestedCustomer =
-                await _dbContext.CustomerBelongsToUserAsync(
-                    organizationId,
-                    request.CustomerId,
-                    currentUserId,
-                    cancellationToken);
-
-            if (!customerOwnsRequestedCustomer)
-            {
-                throw new UnauthorizedAccessException(
-                    "You can only create tickets for yourself.");
-            }
-        }
-        else
-        {
-            var customerBelongsToOrganization =
-                await _dbContext.CustomerBelongsToOrganizationAsync(
-                    organizationId,
-                    request.CustomerId,
-                    cancellationToken);
-
-            if (!customerBelongsToOrganization)
-            {
-                throw new KeyNotFoundException(
-                    "Customer was not found in the current organization.");
-            }
-        }
 
         var teamBelongsToOrganization =
             await _dbContext.TeamBelongsToOrganizationAsync(
@@ -100,29 +83,111 @@ public sealed class TicketService : ITicketService
         return Map(ticket);
     }
 
-    public async Task<IReadOnlyList<TicketDto>> GetAllAsync(
-    CancellationToken cancellationToken = default)
+    public async Task<TicketDto> CreateForCustomerAsync(
+        CreateCustomerTicketRequest request,
+        CancellationToken cancellationToken = default)
     {
         var organizationId = GetOrganizationId();
+        var currentUserId = GetCurrentUserId();
+
+        var customer =
+            await _dbContext.GetCustomerForUserAsync(
+                organizationId,
+                currentUserId,
+                cancellationToken);
+
+        if (customer is null)
+        {
+            throw new UnauthorizedAccessException(
+                "The current user is not an active customer in this organization.");
+        }
+
+        var categoryBelongsToOrganization =
+            await _dbContext.CategoryBelongsToOrganizationAsync(
+                organizationId,
+                request.CategoryId,
+                cancellationToken);
+
+        if (!categoryBelongsToOrganization)
+            throw new KeyNotFoundException(
+                "Category was not found in the current organization.");
+
+        var ticket = new Ticket(
+            organizationId,
+            customer.Id,
+            null,
+            request.CategoryId,
+            request.Title,
+            request.Description,
+            request.Priority);
+
+        _dbContext.AddTicket(ticket);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var triageUserIds =
+            await _dbContext.GetOrganizationTriageUserIdsAsync(
+                organizationId,
+                cancellationToken);
+
+        foreach (var userId in triageUserIds)
+        {
+            await _notificationService.CreateAsync(
+                new CreateNotificationRequest(
+                    UserId: userId,
+                    Type: NotificationType.TicketCreated,
+                    Title: "New customer ticket",
+                    Message: $"Customer \"{customer.Name}\" submitted ticket \"{ticket.Title}\" and it needs triage.",
+                    RelatedEntityId: ticket.Id),
+                cancellationToken);
+        }
+
+        return Map(ticket);
+    }
+
+    public async Task<IReadOnlyList<TicketDto>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var organizationId = GetOrganizationId();
+        var currentUserId = GetCurrentUserId();
 
         IReadOnlyList<Ticket> tickets;
 
-        if (await IsCustomerAsync(
-                organizationId,
-                cancellationToken))
-        {
-            var userId = GetCurrentUserId();
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            currentUserId,
+            cancellationToken);
 
+        if (!role.HasValue)
+        {
             tickets = await _dbContext.GetCustomerTicketsAsync(
                 organizationId,
-                userId,
+                currentUserId,
                 cancellationToken);
         }
         else
         {
-            tickets = await _dbContext.GetTicketsAsync(
-                organizationId,
-                cancellationToken);
+            tickets = role.Value switch
+            {
+                OrganizationRole.Owner =>
+                    await _dbContext.GetTicketsAsync(
+                        organizationId,
+                        cancellationToken),
+
+                OrganizationRole.Manager =>
+                    await _dbContext.GetManagerTicketsAsync(
+                        organizationId,
+                        currentUserId,
+                        cancellationToken),
+
+                OrganizationRole.Agent =>
+                    await _dbContext.GetAgentTicketsAsync(
+                        organizationId,
+                        currentUserId,
+                        cancellationToken),
+
+                _ => Array.Empty<Ticket>()
+            };
         }
 
         return tickets
@@ -130,30 +195,54 @@ public sealed class TicketService : ITicketService
             .ToList();
     }
 
-    public async Task<TicketDto> GetByIdAsync(Guid ticketId, CancellationToken cancellationToken = default)
+    public async Task<TicketDto> GetByIdAsync(
+    Guid ticketId,
+    CancellationToken cancellationToken = default)
     {
         var organizationId = GetOrganizationId();
+        var currentUserId = GetCurrentUserId();
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            currentUserId,
+            cancellationToken);
 
         Ticket? ticket;
 
-        if (await IsCustomerAsync(
-                organizationId,
-                cancellationToken))
+        if (!role.HasValue)
         {
-            var userId = GetCurrentUserId();
-
             ticket = await _dbContext.GetCustomerTicketAsync(
                 organizationId,
                 ticketId,
-                userId,
+                currentUserId,
                 cancellationToken);
         }
         else
         {
-            ticket = await _dbContext.GetTicketAsync(
-                organizationId,
-                ticketId,
-                cancellationToken);
+            ticket = role.Value switch
+            {
+                OrganizationRole.Owner =>
+                    await _dbContext.GetTicketAsync(
+                        organizationId,
+                        ticketId,
+                        cancellationToken),
+
+                OrganizationRole.Manager =>
+                    await _dbContext.GetManagerTicketAsync(
+                        organizationId,
+                        currentUserId,
+                        ticketId,
+                        cancellationToken),
+
+                OrganizationRole.Agent =>
+                    await _dbContext.GetAgentTicketAsync(
+                        organizationId,
+                        currentUserId,
+                        ticketId,
+                        cancellationToken),
+
+                _ => null
+            };
         }
 
         if (ticket is null)
@@ -178,6 +267,11 @@ public sealed class TicketService : ITicketService
         if (ticket is null)
             throw new KeyNotFoundException(
                 "Ticket was not found.");
+
+        await EnsureCanManageTicketAsync(
+            organizationId,
+            ticket,
+            cancellationToken);
 
         var categoryBelongsToOrganization =
             await _dbContext.CategoryBelongsToOrganizationAsync(
@@ -215,6 +309,11 @@ public sealed class TicketService : ITicketService
             throw new KeyNotFoundException(
                 "Ticket was not found.");
 
+        await EnsureCanManageTicketAsync(
+            organizationId,
+            ticket,
+            cancellationToken);
+
         ticket.Open();
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -229,6 +328,109 @@ public sealed class TicketService : ITicketService
                 "No organization context is available.");
     }
 
+    public async Task<TicketDto> AssignTeamAsync(
+     Guid ticketId,
+     Guid teamId,
+     CancellationToken cancellationToken = default)
+    {
+        var organizationId = GetOrganizationId();
+        var currentUserId = GetCurrentUserId();
+
+        var ticket = await GetTicketOrThrowAsync(
+            organizationId,
+            ticketId,
+            cancellationToken);
+
+        await EnsureCanManageTicketAsync(
+            organizationId,
+            ticket,
+            cancellationToken);
+
+        var teamBelongsToOrganization =
+            await _dbContext.TeamBelongsToOrganizationAsync(
+                organizationId,
+                teamId,
+                cancellationToken);
+
+        if (!teamBelongsToOrganization)
+        {
+            throw new KeyNotFoundException(
+                "Team was not found in the current organization.");
+        }
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            currentUserId,
+            cancellationToken);
+
+        if (role == OrganizationRole.Manager)
+        {
+            var managerBelongsToTargetTeam =
+                await _dbContext.TeamMemberExistsAsync(
+                    teamId,
+                    currentUserId,
+                    cancellationToken);
+
+            if (!managerBelongsToTargetTeam)
+            {
+                throw new UnauthorizedAccessException(
+                    "You can only assign tickets to teams you manage.");
+            }
+        }
+
+        ticket.AssignToTeam(teamId);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var teamManagerIds =
+            await _dbContext.GetTeamManagerUserIdsAsync(
+                organizationId,
+                teamId,
+                cancellationToken);
+
+        foreach (var managerId in teamManagerIds)
+        {
+            await _notificationService.CreateAsync(
+                new CreateNotificationRequest(
+                    UserId: managerId,
+                    Type: NotificationType.TicketTeamAssigned,
+                    Title: "Ticket assigned to your team",
+                    Message:
+                        $"Ticket \"{ticket.Title}\" has been assigned to your team.",
+                    RelatedEntityId: ticket.Id),
+                cancellationToken);
+        }
+
+        return Map(ticket);
+    }
+    public async Task<TicketDto> UnassignTeamAsync(
+    Guid ticketId,
+    CancellationToken cancellationToken = default)
+    {
+        var organizationId = GetOrganizationId();
+
+        var ticket = await GetTicketOrThrowAsync(
+            organizationId,
+            ticketId,
+            cancellationToken);
+
+        await EnsureCanManageTicketAsync(
+            organizationId,
+            ticket,
+            cancellationToken);
+
+        if (!ticket.TeamId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "The ticket is not assigned to a team.");
+        }
+
+        ticket.UnassignTeam();
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Map(ticket);
+    }
     public async Task<TicketDto> AssignAsync(
       Guid ticketId,
       Guid agentId,
@@ -241,6 +443,11 @@ public sealed class TicketService : ITicketService
             ticketId,
             cancellationToken);
 
+        await EnsureCanManageTicketAsync(
+            organizationId,
+            ticket,
+            cancellationToken);
+
         var agentOrganizationRole =
             await _dbContext.GetOrganizationRoleAsync(
                 organizationId,
@@ -251,9 +458,13 @@ public sealed class TicketService : ITicketService
             throw new KeyNotFoundException(
                 "The selected user is not an agent in the current organization.");
 
+        if (!ticket.TeamId.HasValue)
+            throw new InvalidOperationException(
+                "A ticket must be assigned to a team before an agent can be assigned.");
+
         var agentIsTeamMember =
             await _dbContext.TeamMemberExistsAsync(
-                ticket.TeamId,
+                ticket.TeamId.Value,
                 agentId,
                 cancellationToken);
 
@@ -285,6 +496,11 @@ public sealed class TicketService : ITicketService
         var ticket = await GetTicketOrThrowAsync(
             organizationId,
             ticketId,
+            cancellationToken);
+
+        await EnsureCanManageTicketAsync(
+            organizationId,
+            ticket,
             cancellationToken);
 
         ticket.UnassignAgent();
@@ -369,6 +585,11 @@ public sealed class TicketService : ITicketService
             ticketId,
             cancellationToken);
 
+        await EnsureCanManageTicketAsync(
+            organizationId,
+            ticket,
+            cancellationToken);
+
         ticket.Close();
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -418,6 +639,102 @@ public sealed class TicketService : ITicketService
                 "Only an assigned agent can perform this operation.");
 
         return ticket;
+    }
+
+    private async Task EnsureCanReadTicketAsync(
+        Guid organizationId,
+        Ticket ticket,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = GetCurrentUserId();
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            currentUserId,
+            cancellationToken);
+
+        if (role == OrganizationRole.Owner)
+            return;
+
+        if (role == OrganizationRole.Manager)
+        {
+            if (!ticket.TeamId.HasValue)
+                return;
+
+            var isTeamMember =
+                await _dbContext.TeamMemberExistsAsync(
+                    ticket.TeamId.Value,
+                    currentUserId,
+                    cancellationToken);
+
+            if (isTeamMember)
+                return;
+
+            throw new UnauthorizedAccessException(
+                "You can only view tickets assigned to your team.");
+        }
+
+        if (role == OrganizationRole.Agent &&
+            ticket.AssignedAgentId == currentUserId)
+            return;
+
+        throw new UnauthorizedAccessException(
+            "You are not allowed to view this ticket.");
+    }
+
+    private async Task EnsureCanCreateStaffTicketAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        if (role != OrganizationRole.Owner &&
+            role != OrganizationRole.Manager)
+        {
+            throw new UnauthorizedAccessException(
+                "Only organization owners and managers can create staff tickets.");
+        }
+    }
+
+    private async Task EnsureCanManageTicketAsync(
+        Guid organizationId,
+        Ticket ticket,
+        CancellationToken cancellationToken)
+    {
+        var currentUserId = GetCurrentUserId();
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            currentUserId,
+            cancellationToken);
+
+        if (role == OrganizationRole.Owner)
+            return;
+
+        if (role != OrganizationRole.Manager)
+        {
+            throw new UnauthorizedAccessException(
+                "Only organization owners and managers can manage tickets.");
+        }
+
+        if (!ticket.TeamId.HasValue)
+            return;
+
+        var isTeamMember =
+            await _dbContext.TeamMemberExistsAsync(
+                ticket.TeamId.Value,
+                currentUserId,
+                cancellationToken);
+
+        if (!isTeamMember)
+        {
+            throw new UnauthorizedAccessException(
+                "You can only manage tickets assigned to your team.");
+        }
     }
 
     private async Task<Ticket> GetTicketOrThrowAsync(

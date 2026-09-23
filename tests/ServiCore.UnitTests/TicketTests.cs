@@ -178,4 +178,98 @@ public sealed class TicketTests
         Assert.Throws<InvalidOperationException>(
             () => ticket.UnassignAgent());
     }
+    [Fact]
+    public void Constructor_ShouldAllowUnassignedTicket()
+    {
+        var ticket = new Ticket(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            "Cannot login",
+            "Customer cannot access the portal.",
+            TicketPriority.High);
+
+        Assert.Equal(TicketStatus.New, ticket.Status);
+        Assert.Null(ticket.TeamId);
+        Assert.Null(ticket.AssignedAgentId);
+    }
+
+    [Fact]
+    public void AssignToAgent_ShouldRequireTeam()
+    {
+        var ticket = new Ticket(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            "Cannot login",
+            "Customer cannot access the portal.",
+            TicketPriority.High);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ticket.AssignToAgent(Guid.NewGuid()));
+
+        Assert.Contains("team", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AssignToTeam_ShouldAssignTeamAndOpenNewTicket()
+    {
+        var ticket = new Ticket(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            "Cannot login",
+            "Customer cannot access the portal.",
+            TicketPriority.High);
+
+        var teamId = Guid.NewGuid();
+
+        ticket.AssignToTeam(teamId);
+
+        Assert.Equal(teamId, ticket.TeamId);
+        Assert.Equal(TicketStatus.Open, ticket.Status);
+        Assert.Null(ticket.AssignedAgentId);
+    }
+
+    [Fact]
+    public void Open_ShouldRequireTeam()
+    {
+        var ticket = new Ticket(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            null,
+            Guid.NewGuid(),
+            "Cannot login",
+            "Customer cannot access the portal.",
+            TicketPriority.High);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ticket.Open());
+
+        Assert.Contains("team", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AssignToTeam_ShouldNotChangeTeamAfterWorkStarts()
+    {
+        var ticket = new Ticket(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Cannot login",
+            "Customer cannot access the portal.",
+            TicketPriority.High);
+
+        ticket.AssignToAgent(Guid.NewGuid());
+        ticket.StartProgress();
+
+        Assert.Throws<InvalidOperationException>(
+            () => ticket.AssignToTeam(Guid.NewGuid()));
+    }
+
+
 }

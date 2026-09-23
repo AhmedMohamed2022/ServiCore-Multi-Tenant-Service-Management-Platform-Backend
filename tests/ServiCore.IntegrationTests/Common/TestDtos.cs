@@ -40,7 +40,7 @@ public sealed record TicketTestResponse(
     Guid Id,
     Guid OrganizationId,
     Guid CustomerId,
-    Guid TeamId,
+    Guid? TeamId,
     Guid? AssignedAgentId,
     Guid CategoryId,
     string Title,

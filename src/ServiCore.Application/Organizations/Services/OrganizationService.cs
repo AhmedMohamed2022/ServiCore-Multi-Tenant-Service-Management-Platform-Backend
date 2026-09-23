@@ -15,10 +15,14 @@ namespace ServiCore.Application.Organizations.Services;
 public class OrganizationService : IOrganizationService
 {
     private readonly IApplicationDbContext _dbContext;
+    private readonly ITenantContext _tenantContext;
 
-    public OrganizationService(IApplicationDbContext dbContext)
+    public OrganizationService(
+        IApplicationDbContext dbContext,
+        ITenantContext tenantContext)
     {
         _dbContext = dbContext;
+        _tenantContext = tenantContext;
     }
 
     public async Task<Result<OrganizationDto>> CreateAsync(
@@ -49,5 +53,25 @@ public class OrganizationService : IOrganizationService
             .ToList() as IReadOnlyList<OrganizationDto>;
 
         return Result<IReadOnlyList<OrganizationDto>>.Success(result);
+    }
+
+    public async Task<Result<IReadOnlyList<OrganizationMemberDto>>> GetMembersAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!_tenantContext.OrganizationId.HasValue)
+        {
+            return Result<IReadOnlyList<OrganizationMemberDto>>.Failure(
+                "An organization context is required.");
+        }
+
+        var members = await _dbContext.GetOrganizationMembersAsync(
+            _tenantContext.OrganizationId.Value,
+            cancellationToken);
+
+        var result = members
+            .Select(m => new OrganizationMemberDto(m.UserId, m.UserName, m.Role))
+            .ToList() as IReadOnlyList<OrganizationMemberDto>;
+
+        return Result<IReadOnlyList<OrganizationMemberDto>>.Success(result);
     }
 }

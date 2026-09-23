@@ -3,6 +3,7 @@
 public sealed record TicketOverviewDto(
     int TotalTickets,
     int NewTickets,
+    int UnassignedTickets,
     int OpenTickets,
     int InProgressTickets,
     int WaitingForCustomerTickets,

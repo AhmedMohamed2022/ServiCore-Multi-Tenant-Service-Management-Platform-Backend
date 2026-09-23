@@ -3,6 +3,7 @@
 public sealed record DashboardTicketStatistics(
     int TotalTickets,
     int NewTickets,
+    int UnassignedTickets,
     int OpenTickets,
     int InProgressTickets,
     int WaitingForCustomerTickets,

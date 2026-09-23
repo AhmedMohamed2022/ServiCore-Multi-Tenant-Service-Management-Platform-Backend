@@ -116,6 +116,28 @@ public class ServiCoreDbContext
                 cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Guid>> GetTeamManagerUserIdsAsync(
+        Guid organizationId,
+        Guid teamId,
+        CancellationToken cancellationToken = default)
+    {
+        return await TeamMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.TeamId == teamId &&
+                Teams.Any(team =>
+                    team.Id == member.TeamId &&
+                    team.OrganizationId == organizationId &&
+                    team.IsActive) &&
+                OrganizationMembers.Any(orgMember =>
+                    orgMember.OrganizationId == organizationId &&
+                    orgMember.UserId == member.UserId &&
+                    orgMember.Role == OrganizationRole.Manager))
+            .Select(member => member.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<TeamMember>>
         GetTeamMembersAsync(
             Guid organizationId,
@@ -238,6 +260,21 @@ public class ServiCoreDbContext
                     customer.IsActive))
             .SingleOrDefaultAsync(cancellationToken);
     }
+    public async Task<Customer?> GetCustomerForUserAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Customers
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                customer =>
+                    customer.OrganizationId == organizationId &&
+                    customer.UserId == userId &&
+                    customer.IsActive,
+                cancellationToken);
+    }
+
     public async Task<bool> CustomerBelongsToUserAsync(
     Guid organizationId,
     Guid customerId,
@@ -321,6 +358,39 @@ public class ServiCoreDbContext
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Ticket>> GetManagerTicketsAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId &&
+                (
+                    !ticket.TeamId.HasValue ||
+                    TeamMembers.Any(member =>
+                        member.TeamId == ticket.TeamId.Value &&
+                        member.UserId == userId)
+                ))
+            .OrderByDescending(ticket => ticket.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Ticket>> GetAgentTicketsAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId &&
+                ticket.AssignedAgentId == userId)
+            .OrderByDescending(ticket => ticket.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<Ticket?> GetTicketAsync(
         Guid organizationId,
         Guid ticketId,
@@ -375,6 +445,21 @@ public class ServiCoreDbContext
                     x.IsActive,
                 cancellationToken);
     }
+    public async Task<IReadOnlyList<Guid>> GetOrganizationTriageUserIdsAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        return await OrganizationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.OrganizationId == organizationId &&
+                (member.Role == OrganizationRole.Owner ||
+                 member.Role == OrganizationRole.Manager))
+            .Select(member => member.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<OrganizationRole?> GetOrganizationRoleAsync(
     Guid organizationId,
     Guid userId,
@@ -547,8 +632,18 @@ public class ServiCoreDbContext
     Guid userId,
     CancellationToken cancellationToken = default)
     {
+        // Deliberately tracked (no .AsNoTracking()): NotificationService
+        // .MarkAllAsReadAsync calls this method to fetch the rows it mutates
+        // via notification.MarkAsRead(), then calls SaveChangesAsync(). With
+        // AsNoTracking(), those entities are detached from the change
+        // tracker, so MarkAsRead() only changes the in-memory object and
+        // SaveChangesAsync() has nothing to persist — the request returns
+        // 204 with no error, but nothing was written. "Mark all as read"
+        // would silently no-op and every notification came back unread on
+        // the next load. Read-only callers (GetAllAsync) are unaffected:
+        // tracking a short-lived per-request list of notification rows that
+        // get mapped straight to DTOs costs nothing.
         return await Notifications
-            .AsNoTracking()
             .Where(notification =>
                 notification.OrganizationId == organizationId &&
                 notification.UserId == userId)
@@ -622,6 +717,9 @@ public class ServiCoreDbContext
         ticket.Status == TicketStatus.New),
 
     group.Count(ticket =>
+        ticket.TeamId == null),
+
+    group.Count(ticket =>
         ticket.Status == TicketStatus.Open),
 
     group.Count(ticket =>
@@ -673,6 +771,7 @@ public class ServiCoreDbContext
             ?? new DashboardTicketStatistics(
                 TotalTickets: 0,
                 NewTickets: 0,
+                UnassignedTickets: 0,
                 OpenTickets: 0,
                 InProgressTickets: 0,
                 WaitingForCustomerTickets: 0,
@@ -851,12 +950,133 @@ public class ServiCoreDbContext
             averageResolutionSeconds,
             averageClosureSeconds);
     }
-    public async Task<IReadOnlyList<TeamStatisticsQueryResult>>
- GetTeamStatisticsAsync(
-     Guid organizationId,
-     DateTime? from,
-     DateTime? to,
-     CancellationToken cancellationToken = default)
+    public async Task<TicketStatisticsQueryResult>     GetManagerTicketStatisticsAsync(
+        Guid organizationId,
+        Guid userId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var ticketsQuery = GetManagerTicketQuery(
+            organizationId,
+            userId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var statusDistribution = await ticketsQuery
+            .GroupBy(ticket => ticket.Status)
+            .Select(group => new
+            {
+                Status = group.Key,
+                TicketCount = group.Count()
+            })
+            .ToListAsync(cancellationToken);
+
+        var statusResults = statusDistribution
+            .Select(result => new TicketStatusStatisticResult(
+                result.Status,
+                result.TicketCount))
+            .ToList();
+
+        var priorityDistribution = await ticketsQuery
+            .GroupBy(ticket => ticket.Priority)
+            .Select(group => new
+            {
+                Priority = group.Key,
+                TicketCount = group.Count()
+            })
+            .ToListAsync(cancellationToken);
+
+        var priorityResults = priorityDistribution
+            .Select(result => new TicketPriorityStatisticResult(
+                result.Priority,
+                result.TicketCount))
+            .ToList();
+
+        var categoryDistribution = await ticketsQuery
+            .Join(
+                Categories.AsNoTracking(),
+                ticket => ticket.CategoryId,
+                category => category.Id,
+                (ticket, category) => new
+                {
+                    Ticket = ticket,
+                    Category = category
+                })
+            .Where(x =>
+                x.Category.OrganizationId == organizationId)
+            .GroupBy(x => new
+            {
+                CategoryId = x.Category.Id,
+                CategoryName = x.Category.Name
+            })
+            .Select(group => new
+            {
+                CategoryId = group.Key.CategoryId,
+                CategoryName = group.Key.CategoryName,
+                TicketCount = group.Count()
+            })
+            .OrderByDescending(result => result.TicketCount)
+            .ThenBy(result => result.CategoryName)
+            .ToListAsync(cancellationToken);
+
+        var categoryResults = categoryDistribution
+            .Select(result => new CategoryTicketStatisticResult(
+                result.CategoryId,
+                result.CategoryName,
+                result.TicketCount))
+            .ToList();
+
+        var resolvedCount = await ticketsQuery
+            .CountAsync(
+                ticket => ticket.ResolvedAt.HasValue,
+                cancellationToken);
+
+        var closedCount = await ticketsQuery
+            .CountAsync(
+                ticket => ticket.ClosedAt.HasValue,
+                cancellationToken);
+
+        var averageResolutionSeconds = await ticketsQuery
+            .Where(ticket => ticket.ResolvedAt.HasValue)
+            .Select(ticket =>
+                (double?)EF.Functions.DateDiffSecond(
+                    ticket.CreatedAt,
+                    ticket.ResolvedAt!.Value))
+            .AverageAsync(cancellationToken);
+
+        var averageClosureSeconds = await ticketsQuery
+            .Where(ticket => ticket.ClosedAt.HasValue)
+            .Select(ticket =>
+                (double?)EF.Functions.DateDiffSecond(
+                    ticket.CreatedAt,
+                    ticket.ClosedAt!.Value))
+            .AverageAsync(cancellationToken);
+
+        return new TicketStatisticsQueryResult(
+            statusResults,
+            priorityResults,
+            categoryResults,
+            resolvedCount,
+            closedCount,
+            averageResolutionSeconds,
+            averageClosureSeconds);
+    }
+    public async Task<IReadOnlyList<TeamStatisticsQueryResult>>    GetTeamStatisticsAsync(
+        Guid organizationId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
     {
         var teamsQuery = Teams
             .AsNoTracking()
@@ -922,8 +1142,7 @@ public class ServiCoreDbContext
                 result.ClosedTickets))
             .ToList();
     }
-    public async Task<IReadOnlyList<AgentStatisticsQueryResult>>
-GetAgentStatisticsAsync(
+    public async Task<IReadOnlyList<AgentStatisticsQueryResult>> GetAgentStatisticsAsync(
     Guid organizationId,
     DateTime? from,
     DateTime? to,
@@ -997,6 +1216,34 @@ GetAgentStatisticsAsync(
                 result.ClosedTickets))
             .ToList();
     }
+    public async Task<IReadOnlyList<ServiCore.Application.Organizations.Queries.OrganizationMemberQueryResult>> GetOrganizationMembersAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await OrganizationMembers
+            .AsNoTracking()
+            .Where(member => member.OrganizationId == organizationId)
+            .Join(
+                Users.AsNoTracking(),
+                member => member.UserId,
+                user => user.Id,
+                (member, user) => new
+                {
+                    UserId = member.UserId,
+                    UserName = user.UserName ?? string.Empty,
+                    member.Role
+                })
+            .OrderBy(result => result.Role)
+            .ThenBy(result => result.UserName)
+            .ToListAsync(cancellationToken);
+
+        return result
+            .Select(result => new ServiCore.Application.Organizations.Queries.OrganizationMemberQueryResult(
+                result.UserId,
+                result.UserName,
+                result.Role))
+            .ToList();
+    }
     public async Task<IReadOnlyList<Organization>> GetOrganizationsForUserAsync(
     Guid userId,
     CancellationToken cancellationToken = default)
@@ -1007,8 +1254,7 @@ GetAgentStatisticsAsync(
             .OrderBy(o => o.Name)
             .ToListAsync(cancellationToken);
     }
-    public async Task<IReadOnlyList<CustomerOrganizationMembership>>
-    GetCustomerMembershipsForUserAsync(
+    public async Task<IReadOnlyList<CustomerOrganizationMembership>>    GetCustomerMembershipsForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
@@ -1026,8 +1272,7 @@ GetAgentStatisticsAsync(
             .OrderBy(m => m.OrganizationName)
             .ToListAsync(cancellationToken);
     }
-    public async Task<IReadOnlyList<CustomerStatisticsQueryResult>>
-GetCustomerStatisticsAsync(
+    public async Task<IReadOnlyList<CustomerStatisticsQueryResult>> GetCustomerStatisticsAsync(
     Guid organizationId,
     DateTime? from,
     DateTime? to,
@@ -1092,8 +1337,7 @@ GetCustomerStatisticsAsync(
                 result.ClosedTickets))
             .ToList();
     }
-    public async Task<IReadOnlyList<CategoryStatisticsQueryResult>>
-GetCategoryStatisticsAsync(
+    public async Task<IReadOnlyList<CategoryStatisticsQueryResult>> GetCategoryStatisticsAsync(
     Guid organizationId,
     DateTime? from,
     DateTime? to,
@@ -1158,8 +1402,7 @@ GetCategoryStatisticsAsync(
                 result.ClosedTickets))
             .ToList();
     }
-    public async Task<IReadOnlyList<TicketTimeSeriesQueryResult>>
-GetTicketTimeSeriesAsync(
+    public async Task<IReadOnlyList<TicketTimeSeriesQueryResult>> GetTicketTimeSeriesAsync(
     Guid organizationId,
     DateTime? from,
     DateTime? to,
@@ -1235,6 +1478,585 @@ GetTicketTimeSeriesAsync(
                 result.ClosedTickets))
             .ToList();
     }
+    public async Task<Ticket?> GetManagerTicketAsync(
+    Guid organizationId,
+    Guid userId,
+    Guid ticketId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId &&
+                ticket.Id == ticketId &&
+                (
+                    !ticket.TeamId.HasValue ||
+                    TeamMembers.Any(member =>
+                        member.TeamId == ticket.TeamId.Value &&
+                        member.UserId == userId)
+                ))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+    public async Task<Ticket?> GetAgentTicketAsync(
+    Guid organizationId,
+    Guid userId,
+    Guid ticketId,
+    CancellationToken cancellationToken = default)
+    {
+        return await Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId &&
+                ticket.Id == ticketId &&
+                ticket.AssignedAgentId == userId)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+    public async Task<DashboardTicketStatistics>     GetManagerDashboardTicketStatisticsAsync(
+        Guid organizationId,
+        Guid userId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var query = GetManagerTicketQuery(
+            organizationId,
+            userId);
+
+        if (from.HasValue)
+        {
+            query = query.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await query
+            .GroupBy(_ => 1)
+            .Select(group => new DashboardTicketStatistics(
+                group.Count(),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.New),
+
+                group.Count(ticket =>
+                    ticket.TeamId == null),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.Open),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.InProgress),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.WaitingForCustomer),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.Resolved),
+
+                group.Count(ticket =>
+                    ticket.Status == TicketStatus.Closed),
+
+                group.Count(ticket =>
+                    ticket.Priority == TicketPriority.Low),
+
+                group.Count(ticket =>
+                    ticket.Priority == TicketPriority.Medium),
+
+                group.Count(ticket =>
+                    ticket.Priority == TicketPriority.High),
+
+                group.Count(ticket =>
+                    ticket.Priority == TicketPriority.Critical),
+
+                group.Count(ticket =>
+                    ticket.ResolvedAt.HasValue),
+
+                group.Count(ticket =>
+                    ticket.ClosedAt.HasValue),
+
+                group
+                    .Where(ticket => ticket.ResolvedAt.HasValue)
+                    .Average(ticket =>
+                        (double?)EF.Functions.DateDiffSecond(
+                            ticket.CreatedAt,
+                            ticket.ResolvedAt!.Value)),
+
+                group
+                    .Where(ticket => ticket.ClosedAt.HasValue)
+                    .Average(ticket =>
+                        (double?)EF.Functions.DateDiffSecond(
+                            ticket.CreatedAt,
+                            ticket.ClosedAt!.Value))
+            ))
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return result
+            ?? new DashboardTicketStatistics(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                null,
+                null);
+    }
+    private IQueryable<Ticket> GetManagerTicketQuery(
+    Guid organizationId,
+    Guid userId)
+    {
+        return Tickets
+            .AsNoTracking()
+            .Where(ticket =>
+                ticket.OrganizationId == organizationId &&
+                (
+                    !ticket.TeamId.HasValue ||
+                    TeamMembers.Any(member =>
+                        member.TeamId == ticket.TeamId.Value &&
+                        member.UserId == userId)
+                ));
+    }
+    public async Task<IReadOnlyList<TeamStatisticsQueryResult>>    GetManagerTeamStatisticsAsync(
+        Guid organizationId,
+        Guid userId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var teamsQuery = Teams
+            .AsNoTracking()
+            .Where(team =>
+                team.OrganizationId == organizationId &&
+                TeamMembers.Any(member =>
+                    member.TeamId == team.Id &&
+                    member.UserId == userId));
+
+        var ticketsQuery = GetManagerTicketQuery(
+            organizationId,
+            userId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await teamsQuery
+            .Select(team => new
+            {
+                TeamId = team.Id,
+                TeamName = team.Name,
+
+                MemberCount = TeamMembers.Count(member =>
+                    member.TeamId == team.Id),
+
+                TotalTickets = ticketsQuery.Count(ticket =>
+                    ticket.TeamId == team.Id),
+
+                ActiveTickets = ticketsQuery.Count(ticket =>
+                    ticket.TeamId == team.Id &&
+                    (ticket.Status == TicketStatus.New ||
+                     ticket.Status == TicketStatus.Open ||
+                     ticket.Status == TicketStatus.InProgress ||
+                     ticket.Status == TicketStatus.WaitingForCustomer)),
+
+                ResolvedTickets = ticketsQuery.Count(ticket =>
+                    ticket.TeamId == team.Id &&
+                    ticket.Status == TicketStatus.Resolved),
+
+                ClosedTickets = ticketsQuery.Count(ticket =>
+                    ticket.TeamId == team.Id &&
+                    ticket.Status == TicketStatus.Closed)
+            })
+            .OrderByDescending(result => result.TotalTickets)
+            .ThenBy(result => result.TeamName)
+            .ToListAsync(cancellationToken);
+
+        return result
+            .Select(result => new TeamStatisticsQueryResult(
+                result.TeamId,
+                result.TeamName,
+                result.MemberCount,
+                result.TotalTickets,
+                result.ActiveTickets,
+                result.ResolvedTickets,
+                result.ClosedTickets))
+            .ToList();
+    }
+    public async Task<IReadOnlyList<AgentStatisticsQueryResult>>
+    GetManagerAgentStatisticsAsync(
+        Guid organizationId,
+        Guid userId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var managerTeamIds = TeamMembers
+            .Where(member =>
+                member.UserId == userId &&
+                Teams.Any(team =>
+                    team.Id == member.TeamId &&
+                    team.OrganizationId == organizationId &&
+                    team.IsActive))
+            .Select(member => member.TeamId);
+
+        var ticketsQuery = GetManagerTicketQuery(
+            organizationId,
+            userId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await OrganizationMembers
+            .AsNoTracking()
+            .Where(member =>
+                member.OrganizationId == organizationId &&
+                member.Role == OrganizationRole.Agent &&
+                TeamMembers.Any(teamMember =>
+                    teamMember.UserId == member.UserId &&
+                    managerTeamIds.Contains(teamMember.TeamId)))
+            .Join(
+                Users.AsNoTracking(),
+                member => member.UserId,
+                user => user.Id,
+                (member, user) => new
+                {
+                    AgentId = member.UserId,
+                    AgentUserName = user.UserName
+                })
+            .Distinct()
+            .Select(agent => new
+            {
+                agent.AgentId,
+                AgentUserName = agent.AgentUserName ?? string.Empty,
+
+                AssignedTickets = ticketsQuery.Count(ticket =>
+                    ticket.AssignedAgentId == agent.AgentId),
+
+                ActiveTickets = ticketsQuery.Count(ticket =>
+                    ticket.AssignedAgentId == agent.AgentId &&
+                    (ticket.Status == TicketStatus.New ||
+                     ticket.Status == TicketStatus.Open ||
+                     ticket.Status == TicketStatus.InProgress ||
+                     ticket.Status == TicketStatus.WaitingForCustomer)),
+
+                ResolvedTickets = ticketsQuery.Count(ticket =>
+                    ticket.AssignedAgentId == agent.AgentId &&
+                    ticket.Status == TicketStatus.Resolved),
+
+                ClosedTickets = ticketsQuery.Count(ticket =>
+                    ticket.AssignedAgentId == agent.AgentId &&
+                    ticket.Status == TicketStatus.Closed)
+            })
+            .OrderByDescending(result => result.AssignedTickets)
+            .ThenBy(result => result.AgentUserName)
+            .ToListAsync(cancellationToken);
+
+        return result
+            .Select(result => new AgentStatisticsQueryResult(
+                result.AgentId,
+                result.AgentUserName,
+                result.AssignedTickets,
+                result.ActiveTickets,
+                result.ResolvedTickets,
+                result.ClosedTickets))
+            .ToList();
+    }
+    public async Task<IReadOnlyList<CustomerStatisticsQueryResult>>
+    GetManagerCustomerStatisticsAsync(
+        Guid organizationId,
+        Guid userId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var ticketsQuery = GetManagerTicketQuery(
+            organizationId,
+            userId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await Customers
+            .AsNoTracking()
+            .Where(customer =>
+                customer.OrganizationId == organizationId &&
+                customer.IsActive &&
+                ticketsQuery.Any(ticket =>
+                    ticket.CustomerId == customer.Id))
+            .Select(customer => new
+            {
+                CustomerId = customer.Id,
+                CustomerName = customer.Name,
+
+                TotalTickets = ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id),
+
+                ActiveTickets = ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id &&
+                    (ticket.Status == TicketStatus.New ||
+                     ticket.Status == TicketStatus.Open ||
+                     ticket.Status == TicketStatus.InProgress ||
+                     ticket.Status == TicketStatus.WaitingForCustomer)),
+
+                ResolvedTickets = ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id &&
+                    ticket.Status == TicketStatus.Resolved),
+
+                ClosedTickets = ticketsQuery.Count(ticket =>
+                    ticket.CustomerId == customer.Id &&
+                    ticket.Status == TicketStatus.Closed)
+            })
+            .OrderByDescending(result => result.TotalTickets)
+            .ThenBy(result => result.CustomerName)
+            .ToListAsync(cancellationToken);
+
+        return result
+            .Select(result => new CustomerStatisticsQueryResult(
+                result.CustomerId,
+                result.CustomerName,
+                result.TotalTickets,
+                result.ActiveTickets,
+                result.ResolvedTickets,
+                result.ClosedTickets))
+            .ToList();
+    }
+    public async Task<IReadOnlyList<CategoryStatisticsQueryResult>>    GetManagerCategoryStatisticsAsync(
+        Guid organizationId,
+        Guid userId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var ticketsQuery = GetManagerTicketQuery(
+            organizationId,
+            userId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await Categories
+            .AsNoTracking()
+            .Where(category =>
+                category.OrganizationId == organizationId &&
+                category.IsActive &&
+                ticketsQuery.Any(ticket =>
+                    ticket.CategoryId == category.Id))
+            .Select(category => new
+            {
+                CategoryId = category.Id,
+                CategoryName = category.Name,
+
+                TotalTickets = ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id),
+
+                ActiveTickets = ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id &&
+                    (ticket.Status == TicketStatus.New ||
+                     ticket.Status == TicketStatus.Open ||
+                     ticket.Status == TicketStatus.InProgress ||
+                     ticket.Status == TicketStatus.WaitingForCustomer)),
+
+                ResolvedTickets = ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id &&
+                    ticket.Status == TicketStatus.Resolved),
+
+                ClosedTickets = ticketsQuery.Count(ticket =>
+                    ticket.CategoryId == category.Id &&
+                    ticket.Status == TicketStatus.Closed)
+            })
+            .OrderByDescending(result => result.TotalTickets)
+            .ThenBy(result => result.CategoryName)
+            .ToListAsync(cancellationToken);
+
+        return result
+            .Select(result => new CategoryStatisticsQueryResult(
+                result.CategoryId,
+                result.CategoryName,
+                result.TotalTickets,
+                result.ActiveTickets,
+                result.ResolvedTickets,
+                result.ClosedTickets))
+            .ToList();
+    }
+    public async Task<OrganizationReportingCounts>
+    GetManagerOrganizationReportingCountsAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var totalCustomers = await Customers
+            .AsNoTracking()
+            .CountAsync(
+                customer =>
+                    customer.OrganizationId == organizationId &&
+                    customer.IsActive,
+                cancellationToken);
+
+        var totalCategories = await Categories
+            .AsNoTracking()
+            .CountAsync(
+                category =>
+                    category.OrganizationId == organizationId &&
+                    category.IsActive,
+                cancellationToken);
+
+        var managerTeamIds = TeamMembers
+            .Where(member =>
+                member.UserId == userId &&
+                Teams.Any(team =>
+                    team.Id == member.TeamId &&
+                    team.OrganizationId == organizationId &&
+                    team.IsActive))
+            .Select(member => member.TeamId);
+
+        var totalTeams = await Teams
+            .AsNoTracking()
+            .CountAsync(
+                team =>
+                    team.OrganizationId == organizationId &&
+                    managerTeamIds.Contains(team.Id),
+                cancellationToken);
+
+        var totalAgents = await OrganizationMembers
+            .AsNoTracking()
+            .CountAsync(
+                member =>
+                    member.OrganizationId == organizationId &&
+                    member.Role == OrganizationRole.Agent &&
+                    TeamMembers.Any(teamMember =>
+                        teamMember.UserId == member.UserId &&
+                        managerTeamIds.Contains(teamMember.TeamId)),
+                cancellationToken);
+
+        return new OrganizationReportingCounts(
+            TotalCustomers: totalCustomers,
+            TotalCategories: totalCategories,
+            TotalTeams: totalTeams,
+            TotalAgents: totalAgents);
+    }
+    public async Task<IReadOnlyList<TicketTimeSeriesQueryResult>>
+    GetManagerTicketTimeSeriesAsync(
+        Guid organizationId,
+        Guid userId,
+        DateTime? from,
+        DateTime? to,
+        CancellationToken cancellationToken = default)
+    {
+        var ticketsQuery = GetManagerTicketQuery(
+            organizationId,
+            userId);
+
+        if (from.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            ticketsQuery = ticketsQuery.Where(ticket =>
+                ticket.CreatedAt <= to.Value);
+        }
+
+        var result = await ticketsQuery
+            .GroupBy(ticket => new
+            {
+                ticket.CreatedAt.Year,
+                ticket.CreatedAt.Month,
+                ticket.CreatedAt.Day
+            })
+            .Select(group => new
+            {
+                Year = group.Key.Year,
+                Month = group.Key.Month,
+                Day = group.Key.Day,
+
+                TotalTickets = group.Count(),
+
+                NewTickets = group.Count(ticket =>
+                    ticket.Status == TicketStatus.New),
+
+                OpenTickets = group.Count(ticket =>
+                    ticket.Status == TicketStatus.Open),
+
+                InProgressTickets = group.Count(ticket =>
+                    ticket.Status == TicketStatus.InProgress),
+
+                WaitingForCustomerTickets = group.Count(ticket =>
+                    ticket.Status == TicketStatus.WaitingForCustomer),
+
+                ResolvedTickets = group.Count(ticket =>
+                    ticket.Status == TicketStatus.Resolved),
+
+                ClosedTickets = group.Count(ticket =>
+                    ticket.Status == TicketStatus.Closed)
+            })
+            .OrderBy(result => result.Year)
+            .ThenBy(result => result.Month)
+            .ThenBy(result => result.Day)
+            .ToListAsync(cancellationToken);
+
+        return result
+            .Select(result => new TicketTimeSeriesQueryResult(
+                new DateTime(
+                    result.Year,
+                    result.Month,
+                    result.Day),
+                result.TotalTickets,
+                result.NewTickets,
+                result.OpenTickets,
+                result.InProgressTickets,
+                result.WaitingForCustomerTickets,
+                result.ResolvedTickets,
+                result.ClosedTickets))
+            .ToList();
+    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -1242,4 +2064,6 @@ GetTicketTimeSeriesAsync(
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(ServiCoreDbContext).Assembly);
     }
+
+    
 }

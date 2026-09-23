@@ -18,6 +18,7 @@ public class TicketsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "CanManageTickets")]
     public async Task<ActionResult<TicketDto>> Create(
         CreateTicketRequest request,
         CancellationToken cancellationToken)
@@ -78,6 +79,12 @@ public class TicketsController : ControllerBase
                 message = ex.Message
             });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
+        }
     }
 
     [HttpPut("{ticketId:guid}")]
@@ -102,6 +109,12 @@ public class TicketsController : ControllerBase
             {
                 message = ex.Message
             });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
@@ -133,6 +146,12 @@ public class TicketsController : ControllerBase
                 message = ex.Message
             });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return Conflict(new
@@ -141,6 +160,44 @@ public class TicketsController : ControllerBase
             });
         }
     }
+    [HttpPost("{ticketId:guid}/assign-team")]
+    [Authorize(Policy = "CanManageTickets")]
+    public async Task<ActionResult<TicketDto>> AssignTeam(
+        Guid ticketId,
+        AssignTicketTeamRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ticket = await _ticketService.AssignTeamAsync(
+                ticketId,
+                request.TeamId,
+                cancellationToken);
+
+            return Ok(ticket);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+
     [HttpPost("{ticketId:guid}/assign")]
     [Authorize(Policy = "CanManageTickets")]
     public async Task<ActionResult<TicketDto>> Assign(
@@ -164,6 +221,12 @@ public class TicketsController : ControllerBase
                 message = ex.Message
             });
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return Conflict(new
@@ -173,11 +236,11 @@ public class TicketsController : ControllerBase
         }
     }
 
-    [HttpPost("{ticketId:guid}/unassign")]
+    [HttpPost("{ticketId:guid}/unassign-agent")]
     [Authorize(Policy = "CanManageTickets")]
-    public async Task<ActionResult<TicketDto>> Unassign(
-        Guid ticketId,
-        CancellationToken cancellationToken)
+    public async Task<ActionResult<TicketDto>> UnassignAgent(
+    Guid ticketId,
+    CancellationToken cancellationToken)
     {
         try
         {
@@ -193,6 +256,47 @@ public class TicketsController : ControllerBase
             {
                 message = ex.Message
             });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                message = ex.Message
+            });
+        }
+    }
+    [HttpPost("{ticketId:guid}/unassign-team")]
+    [Authorize(Policy = "CanManageTickets")]
+    public async Task<ActionResult<TicketDto>> UnassignTeam(
+    Guid ticketId,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ticket = await _ticketService.UnassignTeamAsync(
+                ticketId,
+                cancellationToken);
+
+            return Ok(ticket);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                message = ex.Message
+            });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
@@ -334,6 +438,12 @@ public class TicketsController : ControllerBase
             {
                 message = ex.Message
             });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = ex.Message });
         }
         catch (InvalidOperationException ex)
         {

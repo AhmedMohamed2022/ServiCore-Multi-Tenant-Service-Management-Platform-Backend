@@ -1,6 +1,7 @@
 ﻿using ServiCore.Application.Common.Interfaces;
 using ServiCore.Application.Reporting.DTOs;
 using ServiCore.Application.Reporting.Interfaces;
+using ServiCore.Domain.Enums;
 
 namespace ServiCore.Application.Reporting.Services;
 
@@ -8,13 +9,15 @@ public sealed class ReportingService : IReportingService
 {
     private readonly IApplicationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
-
+    private readonly ICurrentUser _currentUser;
     public ReportingService(
         IApplicationDbContext dbContext,
-        ITenantContext tenantContext)
+        ITenantContext tenantContext,
+        ICurrentUser currentUser)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _currentUser = currentUser;
     }
 
     public async Task<DashboardOverviewDto> GetDashboardAsync(
@@ -24,22 +27,44 @@ public sealed class ReportingService : IReportingService
         ValidateDateRange(request);
 
         var organizationId = GetOrganizationId();
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "The current user is not authenticated.");
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
 
         var ticketStatistics =
-            await _dbContext.GetDashboardTicketStatisticsAsync(
-                organizationId,
-                request.From,
-                request.To,
-                cancellationToken);
+    role == OrganizationRole.Manager
+        ? await _dbContext.GetManagerDashboardTicketStatisticsAsync(
+            organizationId,
+            userId,
+            request.From,
+            request.To,
+            cancellationToken)
+        : await _dbContext.GetDashboardTicketStatisticsAsync(
+            organizationId,
+            request.From,
+            request.To,
+            cancellationToken);
 
         var organizationCounts =
-            await _dbContext.GetOrganizationReportingCountsAsync(
-                organizationId,
-                cancellationToken);
+    role == OrganizationRole.Manager
+        ? await _dbContext.GetManagerOrganizationReportingCountsAsync(
+            organizationId,
+            userId,
+            cancellationToken)
+        : await _dbContext.GetOrganizationReportingCountsAsync(
+            organizationId,
+            cancellationToken);
 
         var ticketOverview = new TicketOverviewDto(
             TotalTickets: ticketStatistics.TotalTickets,
             NewTickets: ticketStatistics.NewTickets,
+            UnassignedTickets: ticketStatistics.UnassignedTickets,
             OpenTickets: ticketStatistics.OpenTickets,
             InProgressTickets: ticketStatistics.InProgressTickets,
             WaitingForCustomerTickets:
@@ -84,12 +109,28 @@ public sealed class ReportingService : IReportingService
 
         var organizationId = GetOrganizationId();
 
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "The current user is not authenticated.");
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
         var result =
-            await _dbContext.GetTicketStatisticsAsync(
-                organizationId,
-                request.From,
-                request.To,
-                cancellationToken);
+            role == OrganizationRole.Manager
+                ? await _dbContext.GetManagerTicketStatisticsAsync(
+                    organizationId,
+                    userId,
+                    request.From,
+                    request.To,
+                    cancellationToken)
+                : await _dbContext.GetTicketStatisticsAsync(
+                    organizationId,
+                    request.From,
+                    request.To,
+                    cancellationToken);
 
         var statusDistribution =
             result.StatusDistribution
@@ -131,21 +172,36 @@ public sealed class ReportingService : IReportingService
             Performance: performance);
     }
 
-    public async Task<IReadOnlyList<TeamStatisticsDto>>
-    GetTeamStatisticsAsync(
-        ReportDateRangeRequest request,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TeamStatisticsDto>> GetTeamStatisticsAsync(
+    ReportDateRangeRequest request,
+    CancellationToken cancellationToken = default)
     {
         ValidateDateRange(request);
 
         var organizationId = GetOrganizationId();
 
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "The current user is not authenticated.");
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
         var result =
-            await _dbContext.GetTeamStatisticsAsync(
-                organizationId,
-                request.From,
-                request.To,
-                cancellationToken);
+            role == OrganizationRole.Manager
+                ? await _dbContext.GetManagerTeamStatisticsAsync(
+                    organizationId,
+                    userId,
+                    request.From,
+                    request.To,
+                    cancellationToken)
+                : await _dbContext.GetTeamStatisticsAsync(
+                    organizationId,
+                    request.From,
+                    request.To,
+                    cancellationToken);
 
         return result
             .Select(team =>
@@ -161,19 +217,35 @@ public sealed class ReportingService : IReportingService
     }
 
     public async Task<IReadOnlyList<AgentStatisticsDto>> GetAgentStatisticsAsync(
-        ReportDateRangeRequest request,
-        CancellationToken cancellationToken = default)
+    ReportDateRangeRequest request,
+    CancellationToken cancellationToken = default)
     {
         ValidateDateRange(request);
 
         var organizationId = GetOrganizationId();
 
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "The current user is not authenticated.");
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
         var result =
-            await _dbContext.GetAgentStatisticsAsync(
-                organizationId,
-                request.From,
-                request.To,
-                cancellationToken);
+            role == OrganizationRole.Manager
+                ? await _dbContext.GetManagerAgentStatisticsAsync(
+                    organizationId,
+                    userId,
+                    request.From,
+                    request.To,
+                    cancellationToken)
+                : await _dbContext.GetAgentStatisticsAsync(
+                    organizationId,
+                    request.From,
+                    request.To,
+                    cancellationToken);
 
         return result
             .Select(agent =>
@@ -188,19 +260,35 @@ public sealed class ReportingService : IReportingService
     }
 
     public async Task<IReadOnlyList<CustomerStatisticsDto>> GetCustomerStatisticsAsync(
-        ReportDateRangeRequest request,
-        CancellationToken cancellationToken = default)
+    ReportDateRangeRequest request,
+    CancellationToken cancellationToken = default)
     {
         ValidateDateRange(request);
 
         var organizationId = GetOrganizationId();
 
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "The current user is not authenticated.");
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
         var result =
-            await _dbContext.GetCustomerStatisticsAsync(
-                organizationId,
-                request.From,
-                request.To,
-                cancellationToken);
+            role == OrganizationRole.Manager
+                ? await _dbContext.GetManagerCustomerStatisticsAsync(
+                    organizationId,
+                    userId,
+                    request.From,
+                    request.To,
+                    cancellationToken)
+                : await _dbContext.GetCustomerStatisticsAsync(
+                    organizationId,
+                    request.From,
+                    request.To,
+                    cancellationToken);
 
         return result
             .Select(customer =>
@@ -214,19 +302,35 @@ public sealed class ReportingService : IReportingService
             .ToList();
     }
     public async Task<IReadOnlyList<CategoryStatisticsDto>> GetCategoryStatisticsAsync(
-        ReportDateRangeRequest request,
-        CancellationToken cancellationToken = default)
+    ReportDateRangeRequest request,
+    CancellationToken cancellationToken = default)
     {
         ValidateDateRange(request);
 
         var organizationId = GetOrganizationId();
 
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "The current user is not authenticated.");
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
         var result =
-            await _dbContext.GetCategoryStatisticsAsync(
-                organizationId,
-                request.From,
-                request.To,
-                cancellationToken);
+            role == OrganizationRole.Manager
+                ? await _dbContext.GetManagerCategoryStatisticsAsync(
+                    organizationId,
+                    userId,
+                    request.From,
+                    request.To,
+                    cancellationToken)
+                : await _dbContext.GetCategoryStatisticsAsync(
+                    organizationId,
+                    request.From,
+                    request.To,
+                    cancellationToken);
 
         return result
             .Select(category =>
@@ -239,8 +343,7 @@ public sealed class ReportingService : IReportingService
                     category.ClosedTickets))
             .ToList();
     }
-    public async Task<IReadOnlyList<TicketTimeSeriesDto>>
-    GetTicketTimeSeriesAsync(
+    public async Task<IReadOnlyList<TicketTimeSeriesDto>>    GetTicketTimeSeriesAsync(
         ReportDateRangeRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -248,12 +351,28 @@ public sealed class ReportingService : IReportingService
 
         var organizationId = GetOrganizationId();
 
+        var userId = _currentUser.UserId
+            ?? throw new UnauthorizedAccessException(
+                "The current user is not authenticated.");
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
         var result =
-            await _dbContext.GetTicketTimeSeriesAsync(
-                organizationId,
-                request.From,
-                request.To,
-                cancellationToken);
+            role == OrganizationRole.Manager
+                ? await _dbContext.GetManagerTicketTimeSeriesAsync(
+                    organizationId,
+                    userId,
+                    request.From,
+                    request.To,
+                    cancellationToken)
+                : await _dbContext.GetTicketTimeSeriesAsync(
+                    organizationId,
+                    request.From,
+                    request.To,
+                    cancellationToken);
 
         return result
             .Select(statistic =>

@@ -15,4 +15,11 @@ public interface IOrganizationService
         string name,
         CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<OrganizationDto>>> GetMineAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every member of the active (tenant-resolved) organization, with their
+    /// role. Backs the Owner's "add a Manager to a team" picker — see
+    /// OrganizationMemberDto for why this exists at all.
+    /// </summary>
+    Task<Result<IReadOnlyList<OrganizationMemberDto>>> GetMembersAsync(CancellationToken cancellationToken = default);
 }

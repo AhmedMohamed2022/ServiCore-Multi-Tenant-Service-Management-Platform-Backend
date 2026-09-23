@@ -139,6 +139,16 @@ public static class DependencyInjection
 
                     policy.AddRequirements(
                         new OrganizationRoleRequirement(
+                            OrganizationRole.Owner));
+                });
+            options.AddPolicy(
+                "CanManageTeamMembership",
+                policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+
+                    policy.AddRequirements(
+                        new OrganizationRoleRequirement(
                             OrganizationRole.Owner,
                             OrganizationRole.Manager));
                 });
