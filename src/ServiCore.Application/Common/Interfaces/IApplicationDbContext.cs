@@ -1,4 +1,4 @@
-﻿using ServiCore.Application.Organizations.Queries;
+using ServiCore.Application.Organizations.Queries;
 using ServiCore.Application.Reporting.Queries;
 using ServiCore.Domain.Entities;
 using ServiCore.Domain.Enums;
@@ -54,6 +54,7 @@ public interface IApplicationDbContext
 
     void RemoveTeamMember(TeamMember member);
     Task<bool> OrganizationMemberExistsAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
+    Task<bool> ActiveCustomerLinkedToOrganizationAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default);
     void AddCustomer(Customer customer);
 
     Task<IReadOnlyList<Customer>> GetCustomersAsync(Guid organizationId, CancellationToken cancellationToken = default);

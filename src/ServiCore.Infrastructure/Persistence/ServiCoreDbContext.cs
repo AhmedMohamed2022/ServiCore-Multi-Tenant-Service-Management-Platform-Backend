@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using ServiCore.Application.Common.Interfaces;
@@ -100,6 +100,20 @@ public class ServiCoreDbContext
                 x =>
                     x.OrganizationId == organizationId &&
                     x.UserId == userId,
+                cancellationToken);
+    }
+
+    public async Task<bool> ActiveCustomerLinkedToOrganizationAsync(
+        Guid organizationId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        return await Customers
+            .AnyAsync(
+                x =>
+                    x.OrganizationId == organizationId &&
+                    x.UserId == userId &&
+                    x.IsActive,
                 cancellationToken);
     }
 

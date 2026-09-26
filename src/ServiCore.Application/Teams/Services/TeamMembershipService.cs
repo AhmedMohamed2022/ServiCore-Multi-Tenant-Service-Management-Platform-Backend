@@ -1,4 +1,4 @@
-﻿using ServiCore.Application.Common.Interfaces;
+using ServiCore.Application.Common.Interfaces;
 using ServiCore.Application.Common.Results;
 using ServiCore.Application.Teams.DTOs;
 using ServiCore.Application.Teams.Interfaces;
@@ -183,6 +183,14 @@ public class TeamMembershipService : ITeamMembershipService
         var organizationId =
             _tenantContext.OrganizationId.Value;
 
+        if (!_currentUser.UserId.HasValue)
+        {
+            return Result<IReadOnlyList<TeamMemberDto>>.Failure(
+                "An authenticated user is required.");
+        }
+
+        var currentUserId = _currentUser.UserId.Value;
+
         var team = await _dbContext.GetTeamAsync(
             organizationId,
             teamId,
@@ -192,6 +200,27 @@ public class TeamMembershipService : ITeamMembershipService
         {
             return Result<IReadOnlyList<TeamMemberDto>>.Failure(
                 "Team not found.");
+        }
+
+        var currentUserRole =
+            await _dbContext.GetOrganizationRoleAsync(
+                organizationId,
+                currentUserId,
+                cancellationToken);
+
+        if (currentUserRole == OrganizationRole.Manager)
+        {
+            var managerBelongsToTeam =
+                await _dbContext.TeamMemberExistsAsync(
+                    teamId,
+                    currentUserId,
+                    cancellationToken);
+
+            if (!managerBelongsToTeam)
+            {
+                return Result<IReadOnlyList<TeamMemberDto>>.Failure(
+                    "You can only view members of your own teams.");
+            }
         }
 
         var members =

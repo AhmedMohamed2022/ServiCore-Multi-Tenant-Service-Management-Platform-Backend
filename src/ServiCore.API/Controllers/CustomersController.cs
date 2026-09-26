@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiCore.Application.Customers.DTOs;
 using ServiCore.Application.Customers.Interfaces;
@@ -48,6 +48,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "CanManageStaff")]
     public async Task<IActionResult> Create(
         [FromBody] CreateCustomerRequest request,
         CancellationToken cancellationToken)
@@ -72,6 +73,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "CanManageStaff")]
     public async Task<IActionResult> GetAll(
         CancellationToken cancellationToken)
     {
@@ -112,6 +114,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPut("{customerId:guid}")]
+    [Authorize(Policy = "CanManageStaff")]
     public async Task<IActionResult> Update(
         Guid customerId,
         [FromBody] UpdateCustomerRequest request,
@@ -135,6 +138,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpDelete("{customerId:guid}")]
+    [Authorize(Policy = "CanManageStaff")]
     public async Task<IActionResult> Deactivate(
         Guid customerId,
         CancellationToken cancellationToken)

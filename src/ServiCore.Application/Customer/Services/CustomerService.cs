@@ -1,8 +1,9 @@
-﻿using ServiCore.Application.Common.Interfaces;
+using ServiCore.Application.Common.Interfaces;
 using ServiCore.Application.Common.Results;
 using ServiCore.Application.Customers.DTOs;
 using ServiCore.Application.Customers.Interfaces;
 using ServiCore.Domain.Entities;
+using ServiCore.Domain.Enums;
 
 namespace ServiCore.Application.Customers.Services;
 
@@ -10,13 +11,16 @@ public class CustomerService : ICustomerService
 {
     private readonly IApplicationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
+    private readonly ICurrentUser _currentUser;
 
     public CustomerService(
         IApplicationDbContext dbContext,
-        ITenantContext tenantContext)
+        ITenantContext tenantContext,
+        ICurrentUser currentUser)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _currentUser = currentUser;
     }
 
     public async Task<Result<CustomerDto>> CreateAsync(
@@ -97,19 +101,66 @@ public class CustomerService : ICustomerService
         Guid customerId,
         CancellationToken cancellationToken = default)
     {
-        var customerResult =
-            await GetActiveCustomerAsync(
-                customerId,
-                cancellationToken);
-
-        if (!customerResult.IsSuccess)
+        if (!_tenantContext.OrganizationId.HasValue)
         {
             return Result<CustomerDto>.Failure(
-                customerResult.Error!);
+                "An organization context is required.");
+        }
+
+        if (!_currentUser.UserId.HasValue)
+        {
+            return Result<CustomerDto>.Failure(
+                "An authenticated user is required.");
+        }
+
+        var organizationId = _tenantContext.OrganizationId.Value;
+        var userId = _currentUser.UserId.Value;
+
+        var role = await _dbContext.GetOrganizationRoleAsync(
+            organizationId,
+            userId,
+            cancellationToken);
+
+        // OrganizationRole applies only to organization staff.
+        // Customers are represented by a Customer record linked to the
+        // authenticated Identity user; they are not an organization role.
+        var isStaff =
+            role == OrganizationRole.Owner ||
+            role == OrganizationRole.Manager ||
+            role == OrganizationRole.Agent;
+
+        if (!isStaff)
+        {
+            var belongsToCustomer =
+                await _dbContext.CustomerBelongsToUserAsync(
+                    organizationId,
+                    customerId,
+                    userId,
+                    cancellationToken);
+
+            if (!belongsToCustomer)
+            {
+                //the same result as a missing customer so a
+                // customer cannot probe whether another customer exists.
+                return Result<CustomerDto>.Failure(
+                    "Customer not found.");
+            }
+        }
+
+        var customer = await _dbContext.GetCustomerAsync(
+            organizationId,
+            customerId,
+            activeOnly: true,
+            cancellationToken);
+
+        if (customer is null)
+        {
+            return Result<CustomerDto>.Failure(
+                "Customer not found.");
         }
 
         return Result<CustomerDto>.Success(
-            MapCustomer(customerResult.Value!));
+            MapCustomer(customer));
     }
 
     public async Task<Result<CustomerDto>> UpdateAsync(

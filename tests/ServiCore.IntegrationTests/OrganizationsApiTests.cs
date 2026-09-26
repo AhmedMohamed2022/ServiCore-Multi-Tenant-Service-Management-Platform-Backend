@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,7 +11,7 @@ namespace ServiCore.IntegrationTests;
 public sealed class OrganizationsApiTests
 {
     [Fact]
-    public async Task CreateOrganization_ShouldPersistOrganization()
+    public async Task StandaloneOrganizationCreationEndpoint_ShouldNotExist()
     {
         await using var factory = new IntegrationTestWebApplicationFactory();
         await factory.ResetDatabaseAsync();
@@ -19,23 +19,8 @@ public sealed class OrganizationsApiTests
 
         var response = await client.PostAsJsonAsync(
             "/api/organizations",
-            new CreateOrganizationRequest("Acme Support"));
+            new { name = "Acme Support" });
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-
-        var created = await response.Content
-            .ReadFromJsonAsync<OrganizationDto>();
-
-        Assert.NotNull(created);
-        Assert.Equal("Acme Support", created.Name);
-
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider
-            .GetRequiredService<ServiCoreDbContext>();
-
-        var persisted = await db.Organizations
-            .SingleAsync(x => x.Id == created.Id);
-
-        Assert.Equal("Acme Support", persisted.Name);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }

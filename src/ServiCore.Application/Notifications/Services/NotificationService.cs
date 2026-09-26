@@ -1,4 +1,4 @@
-﻿using ServiCore.Application.Common.Interfaces;
+using ServiCore.Application.Common.Interfaces;
 using ServiCore.Application.Notifications.DTOs;
 using ServiCore.Application.Notifications.Interfaces;
 using ServiCore.Domain.Entities;
@@ -30,6 +30,24 @@ public class NotificationService : INotificationService
     CancellationToken cancellationToken = default)
     {
         var organizationId = GetOrganizationId();
+
+        var recipientIsOrganizationMember =
+            await _dbContext.OrganizationMemberExistsAsync(
+                organizationId,
+                request.UserId,
+                cancellationToken);
+
+        var recipientIsActiveCustomer =
+            await _dbContext.ActiveCustomerLinkedToOrganizationAsync(
+                organizationId,
+                request.UserId,
+                cancellationToken);
+
+        if (!recipientIsOrganizationMember && !recipientIsActiveCustomer)
+        {
+            throw new UnauthorizedAccessException(
+                "The notification recipient is not a member of this organization.");
+        }
 
         var notification = new Notification(
             request.UserId,
@@ -64,39 +82,6 @@ public class NotificationService : INotificationService
 
         return notificationDto;
     }
-    //after phase 11.5 we will use this version of the CreateAsync method to check if the user is part of the organization before creating a notification for them.
-    //public async Task<NotificationDto> CreateAsync(
-    //CreateNotificationRequest request,
-    //CancellationToken cancellationToken = default)
-    //{
-    //    var organizationId = GetOrganizationId();
-
-    //    var recipientRole =
-    //        await _dbContext.GetOrganizationRoleAsync(
-    //            organizationId,
-    //            request.UserId,
-    //            cancellationToken);
-
-    //    if (!recipientRole.HasValue)
-    //    {
-    //        throw new UnauthorizedAccessException(
-    //            "The notification recipient is not a member of this organization.");
-    //    }
-
-    //    var notification = new Notification(
-    //        request.UserId,
-    //        organizationId,
-    //        request.Type,
-    //        request.Title,
-    //        request.Message,
-    //        request.RelatedEntityId);
-
-    //    _dbContext.AddNotification(notification);
-
-    //    await _dbContext.SaveChangesAsync(cancellationToken);
-
-    //    return Map(notification);
-    //}
 
     public async Task<IReadOnlyList<NotificationDto>> GetAllAsync(
         CancellationToken cancellationToken = default)

@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using ServiCore.IntegrationTests.Common;
@@ -106,6 +106,53 @@ public sealed class CustomerIsolationApiTests : IntegrationTestBase
         Assert.Single(tickets);
         Assert.Equal(ticketA.Id, tickets[0].Id);
         Assert.Equal(customerA.Id, tickets[0].CustomerId);
+
+        var createCustomerResponse = await customerClient.PostAsJsonAsync(
+            "/api/customers",
+            new
+            {
+                name = "Should Fail",
+                email = "should.fail@test.com",
+                phoneNumber = "01000000000"
+            });
+
+        Assert.Equal(HttpStatusCode.Forbidden, createCustomerResponse.StatusCode);
+
+        var getCustomersResponse = await customerClient.GetAsync(
+            "/api/customers");
+
+        Assert.Equal(HttpStatusCode.Forbidden, getCustomersResponse.StatusCode);
+
+        var ownCustomerResponse = await customerClient.GetAsync(
+            $"/api/customers/{customerA.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, ownCustomerResponse.StatusCode);
+
+        var otherCustomerResponse = await customerClient.GetAsync(
+            $"/api/customers/{customerB.Id}");
+
+        Assert.Equal(HttpStatusCode.NotFound, otherCustomerResponse.StatusCode);
+
+        var teamMembersResponse = await customerClient.GetAsync(
+            $"/api/teams/{teamId}/members");
+
+        Assert.Equal(HttpStatusCode.Forbidden, teamMembersResponse.StatusCode);
+
+        var updateCustomerResponse = await customerClient.PutAsJsonAsync(
+            $"/api/customers/{customerA.Id}",
+            new
+            {
+                name = "Should Fail",
+                email = "customer.a.changed@test.com",
+                phoneNumber = "01000000000"
+            });
+
+        Assert.Equal(HttpStatusCode.Forbidden, updateCustomerResponse.StatusCode);
+
+        var deactivateCustomerResponse = await customerClient.DeleteAsync(
+            $"/api/customers/{customerA.Id}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, deactivateCustomerResponse.StatusCode);
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiCore.Application.Teams.Interfaces;
 
@@ -42,6 +42,7 @@ public class TeamMembersController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "CanManageTeamMembership")]
     public async Task<IActionResult> GetMembers(
         Guid teamId,
         CancellationToken cancellationToken)
