@@ -140,7 +140,7 @@ public class CustomerService : ICustomerService
 
             if (!belongsToCustomer)
             {
-                //the same result as a missing customer so a
+                // Deliberately use the same result as a missing customer so a
                 // customer cannot probe whether another customer exists.
                 return Result<CustomerDto>.Failure(
                     "Customer not found.");

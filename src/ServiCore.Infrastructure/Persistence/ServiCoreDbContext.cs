@@ -964,7 +964,7 @@ public class ServiCoreDbContext
             averageResolutionSeconds,
             averageClosureSeconds);
     }
-    public async Task<TicketStatisticsQueryResult>     GetManagerTicketStatisticsAsync(
+    public async Task<TicketStatisticsQueryResult> GetManagerTicketStatisticsAsync(
         Guid organizationId,
         Guid userId,
         DateTime? from,
@@ -1086,7 +1086,7 @@ public class ServiCoreDbContext
             averageResolutionSeconds,
             averageClosureSeconds);
     }
-    public async Task<IReadOnlyList<TeamStatisticsQueryResult>>    GetTeamStatisticsAsync(
+    public async Task<IReadOnlyList<TeamStatisticsQueryResult>> GetTeamStatisticsAsync(
         Guid organizationId,
         DateTime? from,
         DateTime? to,
@@ -1268,23 +1268,44 @@ public class ServiCoreDbContext
             .OrderBy(o => o.Name)
             .ToListAsync(cancellationToken);
     }
-    public async Task<IReadOnlyList<CustomerOrganizationMembership>>    GetCustomerMembershipsForUserAsync(
+    public async Task<IReadOnlyList<CustomerOrganizationMembership>> GetCustomerMembershipsForUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        return await Customers
+        // Project into an ANONYMOUS type, order in SQL, and only then map to
+        // the constructor-built record in memory (same pattern as
+        // GetOrganizationMembersAsync and the reporting queries).
+        //
+        // Do not project straight into CustomerOrganizationMembership and
+        // then OrderBy(m => m.OrganizationName): EF Core can only resolve
+        // member access over a projection when the expression carries member
+        // metadata, which the C# compiler emits for anonymous types but not
+        // for constructor calls on records/classes. Ordering over the record
+        // throws InvalidOperationException ("could not be translated") when
+        // the query executes, GET /api/customers/mine answers 500, and the
+        // portal falls back to asking the customer for a raw organization id.
+        var rows = await Customers
             .AsNoTracking()
             .Where(c => c.UserId == userId && c.IsActive)
             .Join(
                 Organizations,
                 c => c.OrganizationId,
                 o => o.Id,
-                (c, o) => new CustomerOrganizationMembership(
-                    c.Id,
-                    o.Id,
-                    o.Name))
-            .OrderBy(m => m.OrganizationName)
+                (c, o) => new
+                {
+                    CustomerId = c.Id,
+                    OrganizationId = o.Id,
+                    OrganizationName = o.Name
+                })
+            .OrderBy(row => row.OrganizationName)
             .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(row => new CustomerOrganizationMembership(
+                row.CustomerId,
+                row.OrganizationId,
+                row.OrganizationName))
+            .ToList();
     }
     public async Task<IReadOnlyList<CustomerStatisticsQueryResult>> GetCustomerStatisticsAsync(
     Guid organizationId,
@@ -1525,7 +1546,7 @@ public class ServiCoreDbContext
                 ticket.AssignedAgentId == userId)
             .SingleOrDefaultAsync(cancellationToken);
     }
-    public async Task<DashboardTicketStatistics>     GetManagerDashboardTicketStatisticsAsync(
+    public async Task<DashboardTicketStatistics> GetManagerDashboardTicketStatisticsAsync(
         Guid organizationId,
         Guid userId,
         DateTime? from,
@@ -1642,7 +1663,7 @@ public class ServiCoreDbContext
                         member.UserId == userId)
                 ));
     }
-    public async Task<IReadOnlyList<TeamStatisticsQueryResult>>    GetManagerTeamStatisticsAsync(
+    public async Task<IReadOnlyList<TeamStatisticsQueryResult>> GetManagerTeamStatisticsAsync(
         Guid organizationId,
         Guid userId,
         DateTime? from,
@@ -1871,7 +1892,7 @@ public class ServiCoreDbContext
                 result.ClosedTickets))
             .ToList();
     }
-    public async Task<IReadOnlyList<CategoryStatisticsQueryResult>>    GetManagerCategoryStatisticsAsync(
+    public async Task<IReadOnlyList<CategoryStatisticsQueryResult>> GetManagerCategoryStatisticsAsync(
         Guid organizationId,
         Guid userId,
         DateTime? from,
@@ -2079,5 +2100,5 @@ public class ServiCoreDbContext
             typeof(ServiCoreDbContext).Assembly);
     }
 
-    
+
 }
