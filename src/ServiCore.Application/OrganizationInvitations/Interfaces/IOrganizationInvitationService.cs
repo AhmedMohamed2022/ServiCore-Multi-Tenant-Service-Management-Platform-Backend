@@ -10,7 +10,11 @@ public interface IOrganizationInvitationService
         InviteOrganizationMemberRequest request,
         CancellationToken cancellationToken = default);
 
-    Task AcceptAsync(
+    Task<OrganizationInvitationPreviewDto> PreviewAsync(
+        string token,
+        CancellationToken cancellationToken = default);
+
+    Task<AcceptOrganizationInvitationResult> AcceptAsync(
         AcceptOrganizationInvitationRequest request,
         CancellationToken cancellationToken = default);
 

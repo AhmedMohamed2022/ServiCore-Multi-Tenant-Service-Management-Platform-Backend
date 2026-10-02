@@ -159,7 +159,43 @@ public class CustomerInvitationService
         return token;
     }
 
-    public async Task AcceptAsync(
+    public async Task<CustomerInvitationPreviewDto> PreviewAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            throw new ArgumentException(
+                "Invitation token is required.",
+                nameof(token));
+
+        var tokenHash =
+            _tokenService.HashToken(token.Trim());
+
+        var invitation =
+            await _dbContext
+                .GetCustomerInvitationByTokenHashAsync(
+                    tokenHash,
+                    cancellationToken);
+
+        if (invitation is null)
+            throw new KeyNotFoundException(
+                "Invalid invitation token.");
+
+        if (!invitation.IsUsable)
+            throw new InvalidOperationException(
+                "This invitation is no longer usable.");
+
+        var existingUser =
+            await _identityService.GetUserIdByEmailAsync(
+                invitation.Email,
+                cancellationToken);
+
+        return new CustomerInvitationPreviewDto(
+            invitation.Email,
+            existingUser.IsSuccess);
+    }
+
+    public async Task<AcceptCustomerInvitationResult> AcceptAsync(
         AcceptCustomerInvitationRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -189,6 +225,10 @@ public class CustomerInvitationService
             await _dbContext.BeginTransactionAsync(
                 cancellationToken);
 
+        // True when the invited email already belongs to an account. The
+        // supplied password (if any) is ignored in that case.
+        var existingAccount = false;
+
         try
         {
             var customer =
@@ -215,6 +255,7 @@ public class CustomerInvitationService
             if (existingUserResult.IsSuccess)
             {
                 userId = existingUserResult.Value;
+                existingAccount = true;
             }
             else
             {
@@ -252,6 +293,8 @@ public class CustomerInvitationService
 
             throw;
         }
+
+        return new AcceptCustomerInvitationResult(existingAccount);
     }
 
     public async Task RevokeAsync(

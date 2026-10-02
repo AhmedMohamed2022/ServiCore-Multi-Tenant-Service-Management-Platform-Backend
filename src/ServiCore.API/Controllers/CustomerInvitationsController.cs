@@ -57,6 +57,43 @@ public class CustomerInvitationsController : ControllerBase
     }
 
     [AllowAnonymous]
+    [HttpGet("preview")]
+    public async Task<IActionResult> Preview(
+        [FromQuery] string token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var preview = await _service.PreviewAsync(
+                token,
+                cancellationToken);
+
+            return Ok(preview);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+    }
+
+    [AllowAnonymous]
     [HttpPost("accept")]
     public async Task<IActionResult> Accept(
         [FromBody] AcceptCustomerInvitationRequest request,
@@ -64,14 +101,16 @@ public class CustomerInvitationsController : ControllerBase
     {
         try
         {
-            await _service.AcceptAsync(
+            var result = await _service.AcceptAsync(
                 request,
                 cancellationToken);
 
             return Ok(new
             {
-                message =
-                    "Customer account is ready. You can now login."
+                message = result.ExistingAccount
+                    ? "Invitation accepted. Sign in with your existing password."
+                    : "Customer account is ready. You can now login.",
+                existingAccount = result.ExistingAccount
             });
         }
         catch (KeyNotFoundException ex)

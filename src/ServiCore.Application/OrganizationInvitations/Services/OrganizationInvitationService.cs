@@ -182,7 +182,42 @@ public class OrganizationInvitationService : IOrganizationInvitationService
             token);
     }
 
-    public async Task AcceptAsync(
+    public async Task<OrganizationInvitationPreviewDto> PreviewAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            throw new ArgumentException(
+                "Invitation token is required.",
+                nameof(token));
+
+        var tokenHash = _tokenService.HashToken(token.Trim());
+
+        var invitation =
+            await _dbContext.GetInvitationByTokenHashAsync(
+                tokenHash,
+                cancellationToken);
+
+        if (invitation is null)
+            throw new KeyNotFoundException(
+                "Invitation is invalid.");
+
+        if (!invitation.IsUsable)
+            throw new InvalidOperationException(
+                "Invitation is no longer usable.");
+
+        var existingUser =
+            await _identityService.GetUserIdByEmailAsync(
+                invitation.Email,
+                cancellationToken);
+
+        return new OrganizationInvitationPreviewDto(
+            invitation.Email,
+            invitation.Role.ToString(),
+            existingUser.IsSuccess);
+    }
+
+    public async Task<AcceptOrganizationInvitationResult> AcceptAsync(
     AcceptOrganizationInvitationRequest request,
     CancellationToken cancellationToken = default)
     {
@@ -214,6 +249,11 @@ public class OrganizationInvitationService : IOrganizationInvitationService
             await _dbContext.BeginTransactionAsync(
                 cancellationToken);
 
+        // True when the invited email already belongs to an account. In that
+        // case the supplied password (if any) is deliberately ignored, and the
+        // caller is told so the UI can ask the person to sign in normally.
+        var existingAccount = false;
+
         try
         {
             var existingUserId =
@@ -226,6 +266,7 @@ public class OrganizationInvitationService : IOrganizationInvitationService
             if (existingUserId.IsSuccess)
             {
                 userId = existingUserId.Value;
+                existingAccount = true;
             }
             else
             {
@@ -284,6 +325,8 @@ public class OrganizationInvitationService : IOrganizationInvitationService
         {
             await transaction.DisposeAsync();
         }
+
+        return new AcceptOrganizationInvitationResult(existingAccount);
     }
     public async Task<IReadOnlyList<OrganizationInvitationDto>>
         GetAllAsync(

@@ -8,7 +8,11 @@ public interface ICustomerInvitationService
         InviteCustomerRequest request,
         CancellationToken cancellationToken = default);
 
-    Task AcceptAsync(
+    Task<CustomerInvitationPreviewDto> PreviewAsync(
+        string token,
+        CancellationToken cancellationToken = default);
+
+    Task<AcceptCustomerInvitationResult> AcceptAsync(
         AcceptCustomerInvitationRequest request,
         CancellationToken cancellationToken = default);
 

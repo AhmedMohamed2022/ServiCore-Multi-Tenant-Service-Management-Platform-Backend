@@ -53,6 +53,43 @@ public class OrganizationInvitationsController : ControllerBase
         }
     }
 
+    [HttpGet("preview")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Preview(
+        [FromQuery] string token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var preview = await _service.PreviewAsync(
+                token,
+                cancellationToken);
+
+            return Ok(preview);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                error = ex.Message
+            });
+        }
+    }
+
     [HttpPost("accept")]
     [AllowAnonymous]
     public async Task<IActionResult> Accept(
@@ -61,14 +98,16 @@ public class OrganizationInvitationsController : ControllerBase
     {
         try
         {
-            await _service.AcceptAsync(
+            var result = await _service.AcceptAsync(
                 request,
                 cancellationToken);
 
             return Ok(new
             {
-                message =
-                    "Invitation accepted successfully."
+                message = result.ExistingAccount
+                    ? "Invitation accepted. Sign in with your existing password."
+                    : "Invitation accepted successfully.",
+                existingAccount = result.ExistingAccount
             });
         }
         catch (KeyNotFoundException ex)
