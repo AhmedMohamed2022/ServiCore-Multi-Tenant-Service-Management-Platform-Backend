@@ -99,6 +99,8 @@ The system supports:
 
 <img width="3810" height="1735" alt="tickets" src="https://github.com/user-attachments/assets/90eafc1f-a25b-42f0-b1b6-3e7ee82f1da3" />
 
+### Ticket Details
+
 
 <img width="3812" height="1745" alt="ticket-details" src="https://github.com/user-attachments/assets/f2982da7-85c3-4fcb-890c-315f57aaf376" />
 
